@@ -1002,18 +1002,18 @@ class openOrder extends webServiceServer {
     $es_targets = $this->config->get_value('es_target', 'setup');
 
     verbose::log(DEBUG, 'openorder:: ubf: ' . $ubf_xml);
-    foreach ($es_targets as $target_type => $target) {
+    foreach ($es_targets as $target_id => $target) {
       if (! $timeout = $target['timeout']) {
         $timeout = 30;
       }
   // send thru a z3950 NEP
-      $this->watch->start($target_type);
-      if (($target_type == 'z3950') && $target['host']) {
+      $this->watch->start($target_id);
+      if (($target['protocol'] == 'z3950') && $target['host']) {
         $z3950 = new z3950();
         $z3950->set_authentication($target['authentication'], $_SERVER['REMOTE_ADDR']);
         $z3950->set_target($target['host']);
         $z_result = $z3950->z3950_xml_update($ubf_xml, $timeout);
-        verbose::log(DEBUG, 'openorder:: ' . $target_type . ' result: ' . str_replace("\n", '', print_r($z_result, TRUE)));
+        verbose::log(DEBUG, 'openorder:: ' . $target_id . ' result: ' . str_replace("\n", '', print_r($z_result, TRUE)));
   // test
   //          $z_result = Array ("xmlUpdateDoc" => '<ors:orderResponse xmlns:ors="http://oss.dbc.dk/ns/openresourcesharing"><ors:orderId>1000000068</ors:orderId></ors:orderResponse>');
         if ($z3950->get_errno()) {
@@ -1033,7 +1033,7 @@ class openOrder extends webServiceServer {
         }
       }
     // send thru a http-corba bridge
-      if (($target_type == 'http') && $target['host']) {
+      if (($target['protocol'] == 'http') && $target['host']) {
         if (empty($this->curl)) {
           $this->curl = new curl();
         }
@@ -1041,7 +1041,7 @@ class openOrder extends webServiceServer {
         $this->curl->set_post($ubf_xml);
         $this->curl->set_option(CURLOPT_HTTPHEADER, array('Content-Type: text/xml; charset=UTF-8'));
         $f_result = $this->curl->get($target['host']);
-        verbose::log(DEBUG, 'openorder:: ' . $target_type . ' result: ' . str_replace("\n", '', print_r($f_result, TRUE)));
+        verbose::log(DEBUG, 'openorder:: ' . $target_id . ' result: ' . str_replace("\n", '', print_r($f_result, TRUE)));
         $curl_err = $this->curl->get_status();
         if ($curl_err['http_code'] < 200 || $curl_err['http_code'] > 299) {
           verbose::log(FATAL, 'es_corba_bridge http-error: ' . $curl_err['http_code'] . ' from: ' . $target['bridge']);
@@ -1064,7 +1064,7 @@ class openOrder extends webServiceServer {
           }
         }
       }
-      $this->watch->stop($target_type);
+      $this->watch->stop($target_id);
     }
     if (!isset($ret)) {
       $ret = FALSE;
