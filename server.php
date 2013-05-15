@@ -999,7 +999,9 @@ class openOrder extends webServiceServer {
    * return target_reference or FALSE
    */
   private function es_xmlupdate(&$ubf_xml, $need_answer=FALSE) {
-    $es_targets = $this->config->get_value('es_target', 'setup');
+    if (!$es_targets = $this->config->get_value('es_target', 'setup')) {
+      $es_targets = array();
+    }
 
     verbose::log(DEBUG, 'openorder:: ubf: ' . $ubf_xml);
     foreach ($es_targets as $target_id => $target) {
