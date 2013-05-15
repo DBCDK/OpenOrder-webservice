@@ -52,18 +52,24 @@ openagency_timeout = 20
 ;openagency_override = 010100
 
 ;Extend Service target
-; set es_target[z3950][host] and es_target[z3950][authentication] to send as z3950 update
-; set es_target[http][host] to send as request to a http-service (henry)
+; z3950:
+; es_target[some_id][protocol] = z3950
+; set es_target[some_id][host] and es_target[some_id][authentication] to send as z3950 update
+; http:
+; es_target[some_id][protocol] = http
+; set es_target[some_id][host] to send as request to henry
 ; The targets are used in the order they are listet and the result is taken from the first, results
 ; from one of the following targets are ignored
 ; Normally, only one target is specified, but for test and debug purposes, more can be used
 ; timeout (in seconds) can be set - default is 30 seconds
 ;
-;es_target[z3950][host] = some_es_z3950_target
-;es_target[z3950][authentication] =  user/group/password
-;es_target[z3950][timeout] =  30
-;es_target[http][host] = http://etwas.dbc.dk/henry
-;es_target[http][timeout] =  30
+;es_target[some_z_target][protocol] = z3950
+;es_target[some_z_target][host] = some_es_z3950_target
+;es_target[some_z_target][authentication] =  user/group/password
+;es_target[some_z_target][timeout] =  30
+;es_target[some_http_target][protocol] = http
+;es_target[some_http_target][host] = http://etwas.dbc.dk/henry
+;es_target[some_http_target][timeout] =  30
 
 
 ; order policy script
