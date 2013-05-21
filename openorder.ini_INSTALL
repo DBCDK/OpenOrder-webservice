@@ -73,6 +73,9 @@ openagency_timeout = 20
 
 
 ; order policy script
+; This script hides the javascript execution.
+; If there are more than one version running, the scriptname should contain
+; the version as part of its name - like .../OrderPolicy_2.3.sh
 order_policy_shell = /var/www/php_exec/OrderPolicy.sh
 
 ; path to temp-dir where writing/reading/deleting files are allowed
