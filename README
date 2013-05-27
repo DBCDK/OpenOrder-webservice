@@ -3,7 +3,12 @@ OpenOrder WebService, Copyright(c) 2009, DBC
 Introduction
 ------------
 
-OpenOrder webservice and client
+This repo contains the OpenOrder webservice and client. It is part of the Open Library System Suite.
+
+The OpenOrder service serves several functions related to ordering of materials managed by libraries. 
+The service can provide definitive information on whether a specific resource can be ordered, it can
+receive orders and pass them on for further processing in the OLS Base Over Bestillinger (BOB) system, 
+and it can update the status of registered orders.
 
 
 License
@@ -35,11 +40,13 @@ Documentation
 -------------
 http://gnit.dk/doc/opensearch ?
 
-USe Doxygen to get code documentation
+Use Doxygen to get code documentation
 
 
 Installation
 ------------
+OpenOrder-webservice requires [class_lib-webservice](https://github.com/DBCDK/class_lib-webservice) be installed. 
+
 In the php.ini file:
 - make sure that always_populate_raw_post_data = On
 
