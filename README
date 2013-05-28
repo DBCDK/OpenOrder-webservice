@@ -38,14 +38,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 Documentation
 -------------
-http://gnit.dk/doc/opensearch ?
+http://oss.dbc.dk/plone/services/open-order
 
 Use Doxygen to get code documentation
 
 
 Installation
 ------------
-OpenOrder-webservice requires [class_lib-webservice](https://github.com/DBCDK/class_lib-webservice) be installed. 
+The webservice requires [class_lib-webservice](https://github.com/DBCDK/class_lib-webservice) be installed. 
 
 In the php.ini file:
 - make sure that always_populate_raw_post_data = On
