@@ -93,6 +93,9 @@ logfile = /tmp/openorder.log
 ; login for copydan table
 copydan_credentials = ora_user/ora_passwd@some.server.dk
 
+; login to ors for getTaskStatus request
+;ors_credentials = ora_user/ora_passwd@some.server.dk
+
 ; login for redirect_stat table
 redirect_credentials = ora_user/ora_passwd@some.server.dk
 
@@ -110,6 +113,11 @@ verbose = WARNING+ERROR+FATAL+STAT+TIMER+TRACE+DEBUG+Z3950+OCI
 
 ; format for automatic timer dump %s is the soap-action used
 dump_timer = openorder(%s)
+
+; memcache - enabling this will cache some result for 'cache_expire' seconds
+;cache_host = localhost
+;cache_port = 11211
+;cache_expire = 60
 
 [textmaps]
 notemap[nourl][true][agency owns material] = owned_accepted
