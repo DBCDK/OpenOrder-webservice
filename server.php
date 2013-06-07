@@ -171,9 +171,9 @@ class openOrder extends webServiceServer {
         $cache_key = 'OO_cad_' . $this->version . $param->serviceRequester->_value . 
                                                   $pid . 
                                                   $agency;
-        if ($ret = $this->cache->get($cache_key)) {
+        if ($cached = $this->cache->get($cache_key)) {
           verbose::log(STAT, 'Cache hit');
-          return $ret;
+          return $cached;
         }
       }
   // no cache, do the job
@@ -239,9 +239,9 @@ class openOrder extends webServiceServer {
         $cache_key = 'OO_ced_' . $this->version . $param->serviceRequester->_value . 
                                                   $issn . 
                                                   $agency;
-        if ($ret = $this->cache->get($cache_key)) {
+        if ($cached = $this->cache->get($cache_key)) {
           verbose::log(STAT, 'Cache hit');
-          return $ret;
+          return $cached;
         }
       }
   // no cache, do the job
