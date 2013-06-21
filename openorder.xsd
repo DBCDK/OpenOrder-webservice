@@ -828,6 +828,7 @@
 			<xs:enumeration value="article not found"/>
 			<xs:enumeration value="issn not found"/>
 			<xs:enumeration value="no electronic supplier found"/>
+			<xs:enumeration value="no electronic supplier has article"/>
 		</xs:restriction>
 	</xs:simpleType>
 	<xs:simpleType name="errorType">
