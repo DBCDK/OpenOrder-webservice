@@ -108,22 +108,22 @@ class openOrder extends webServiceServer {
           in_array($param->providerAnswer->_value, array('', 'unfilled', 'will_supply'))) {
         $ar->error->_value = 'providerAnswerReason is mandatory with specified providerAnswer';
       }
-      elseif (!$this->check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+      elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
         $ar->error->_value = 'operation not authorized for specified responderId';
       }
       else {
         $ubf = new DOMDocument('1.0', 'utf-8');
-        $answer = $this->add_ubf_node($ubf, $ubf, 'answer', '', TRUE);
-        $this->add_ubf_node($ubf, $answer, 'expectedDelivery', $param->expectedDelivery->_value);
-        $this->add_ubf_node($ubf, $answer, 'latestProviderNote', $param->latestProviderNote->_value);
-        $this->add_ubf_node($ubf, $answer, 'orderId', $param->orderId->_value);
-        $this->add_ubf_node($ubf, $answer, 'providerAnswer', $param->providerAnswer->_value);
-        $this->add_ubf_node($ubf, $answer, 'providerAnswerDate', $param->providerAnswerDate->_value);
-        $this->add_ubf_node($ubf, $answer, 'providerAnswerReason', $param->providerAnswerReason->_value);
-        $this->add_ubf_node($ubf, $answer, 'providerOrderState', $param->providerOrderState->_value);
-        $this->add_ubf_node($ubf, $answer, 'requesterId', $param->requesterId->_value);
-        $this->add_ubf_node($ubf, $answer, 'responderId', $param->responderId->_value);
-        $this->add_ubf_node($ubf, $answer, 'serviceRequester', $param->serviceRequester->_value);
+        $answer = self::add_ubf_node($ubf, $ubf, 'answer', '', TRUE);
+        self::add_ubf_node($ubf, $answer, 'expectedDelivery', $param->expectedDelivery->_value);
+        self::add_ubf_node($ubf, $answer, 'latestProviderNote', $param->latestProviderNote->_value);
+        self::add_ubf_node($ubf, $answer, 'orderId', $param->orderId->_value);
+        self::add_ubf_node($ubf, $answer, 'providerAnswer', $param->providerAnswer->_value);
+        self::add_ubf_node($ubf, $answer, 'providerAnswerDate', $param->providerAnswerDate->_value);
+        self::add_ubf_node($ubf, $answer, 'providerAnswerReason', $param->providerAnswerReason->_value);
+        self::add_ubf_node($ubf, $answer, 'providerOrderState', $param->providerOrderState->_value);
+        self::add_ubf_node($ubf, $answer, 'requesterId', $param->requesterId->_value);
+        self::add_ubf_node($ubf, $answer, 'responderId', $param->responderId->_value);
+        self::add_ubf_node($ubf, $answer, 'serviceRequester', $param->serviceRequester->_value);
   
         $ubf_xml = $ubf->saveXML();
         if ($this->validate['ubf'] && !$this->validate_xml($ubf_xml, $this->validate['ubf'])) {
@@ -131,7 +131,7 @@ class openOrder extends webServiceServer {
           verbose::log(FATAL, 'openorder:: answer: ' . $ar->error->_value);
         }
         else {
-          if ($this->es_xmlupdate($ubf_xml)) {
+          if (self::es_xmlupdate($ubf_xml)) {
             $ar->updateStatus->_value = 'update_sent';
           } else {
             $ar->error->_value = 'service_error';
@@ -169,7 +169,7 @@ class openOrder extends webServiceServer {
       $agency = '820010';  // sofar only 820010 can deliver electronically
       if ($this->cache) {
         $cache_key = 'OO_cad_' . $this->version . $param->serviceRequester->_value . 
-                                                  $pid . 
+                                                  $param->pid->_value . 
                                                   $agency;
         if ($cached = $this->cache->get($cache_key)) {
           verbose::log(STAT, 'Cache hit');
@@ -178,28 +178,45 @@ class openOrder extends webServiceServer {
       }
   // no cache, do the job
       if ($agency <> '820010') {
-        $cadr->articleDeliveryPossible->_value = '0';
-        $cadr->articleDeliveryPossibleReason->_value = 'no electronic supplier found';
+        $cadr = self::set_cadr('0', 'no electronic supplier found');
       }
       else {
-        if ($issn = $this->pid_to_issn($param->pid->_value)) {
-          try {
-            if ($this->find_issn_in_copydan($issn)) {
-              $cadr->articleDeliveryPossible->_value = '1';
-              $cadr->articleDirect->_value = 'electronic';
+        $issn = self::pid_to_issn($param->pid->_value, $agency);
+        switch ($issn) {
+          case 'not_journal':
+            $cadr = self::set_cadr('0', 'article not found');
+            break;
+          case 'not_in_agency':
+            $cadr = self::set_cadr('0', 'no electronic supplier has article');
+            break;
+          case 'undefined':
+            $cadr = self::set_cadr('0', 'issn not found');
+            break;
+          case 'error_holding':
+            verbose::log(ERROR, 'Error finding holdings. ' . $param->pid->_value . ' for ' . $agency);
+            $cadr->error->_value = 'service_error';
+            break;
+          case 'error_search':
+            verbose::log(ERROR, 'Error searching record: ' . $param->pid->_value . ' for ' . $agency);
+            $cadr->error->_value = 'service_error';
+            break;
+          case 'error_finding_journal':
+            verbose::log(ERROR, 'Error executing order policy shell: ' . $param->pid->_value . ' for ' . $agency);
+            $cadr->error->_value = 'service_error';
+            break;
+          default:
+            try {
+              if (self::find_issn_in_copydan($issn)) {
+                $cadr = self::set_cadr('1', 'electronic');
+              }
+              else {
+                $cadr = self::set_cadr('1', 'postal');
+              }
             }
-            else {
-              $cadr->articleDeliveryPossible->_value = '1';
-              $cadr->articleDirect->_value = 'postal';
+            catch (ociException $e) {
+              $cadr->error->_value = $e->getMessage();
             }
-          }
-          catch (ociException $e) {
-            $cadr->error->_value = $e->getMessage();
-          }
-        }
-        else {
-          $cadr->articleDeliveryPossible->_value = '0';
-          $cadr->articleDeliveryPossibleReason->_value = 'article not found';
+            break;
         }
       }
     }
@@ -234,7 +251,7 @@ class openOrder extends webServiceServer {
     }
     else {
       $agency = '820010';  // sofar only 820010 can deliver electronically
-      $issn = $this->normalize_issn($param->issn->_value);
+      $issn = self::normalize_issn($param->issn->_value);
       if ($this->cache) {
         $cache_key = 'OO_ced_' . $this->version . $param->serviceRequester->_value . 
                                                   $issn . 
@@ -251,7 +268,7 @@ class openOrder extends webServiceServer {
       }
       else {
         try {
-          if ($this->find_issn_in_copydan($issn)) {
+          if (self::find_issn_in_copydan($issn)) {
             $cedr->electronicDeliveryPossible->_value = '1';
           }
           else {
@@ -305,10 +322,10 @@ class openOrder extends webServiceServer {
     else {
       if (!is_array($param->pid))
         $param->pid = array($param->pid);
-      $policy = $this->check_order_policy($param->bibliographicRecordId->_value,
-                                          $this->strip_agency($param->bibliographicRecordAgencyId->_value),
+      $policy = self::check_order_policy($param->bibliographicRecordId->_value,
+                                          self::strip_agency($param->bibliographicRecordAgencyId->_value),
                                           $param->pid,
-                                          $this->strip_agency($param->pickUpAgencyId->_value),
+                                          self::strip_agency($param->pickUpAgencyId->_value),
                                           $param->serviceRequester->_value);
       verbose::log(DEBUG, 'openorder:: policy: ' . print_r($policy, TRUE));
       if ($policy['checkOrderPolicyError'])
@@ -368,7 +385,7 @@ class openOrder extends webServiceServer {
     if (!$this->aaa->has_right('netpunkt.dk', 500)) {
       $gtsr->error->_value = 'authentication_error';
     }
-    elseif (!$this->check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
+    elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
       $gtsr->error->_value = 'operation not authorized for specified requesterId';
     }
     else {
@@ -482,20 +499,20 @@ class openOrder extends webServiceServer {
       if (!is_array($param->pid))
         $param->pid = array($param->pid);
       if ($param->pickUpAgencyId->_value) {
-        $policy = $this->check_order_policy(
+        $policy = self::check_order_policy(
                     $param->bibliographicRecordId->_value,
-                    $this->strip_agency($param->bibliographicRecordAgencyId->_value),
+                    self::strip_agency($param->bibliographicRecordAgencyId->_value),
                     $param->pid,
-                    $this->strip_agency($param->pickUpAgencyId->_value),
+                    self::strip_agency($param->pickUpAgencyId->_value),
                     $param->serviceRequester->_value);
       }
       elseif ($param->verificationReferenceSource->_value == 'none') {
-        $policy = $this->check_nonVerifiedIll_order_policy($param->responderId->_value);
+        $policy = self::check_nonVerifiedIll_order_policy($param->responderId->_value);
       }
       else
-        $policy = $this->check_ill_order_policy(
+        $policy = self::check_ill_order_policy(
                     $param->bibliographicRecordId->_value,
-                    $this->strip_agency($param->bibliographicRecordAgencyId->_value),
+                    self::strip_agency($param->bibliographicRecordAgencyId->_value),
                     $param->responderId->_value);
       verbose::log(DEBUG, 'openorder:: policy: ' . print_r($policy, TRUE));
       if ($policy['reason']) {
@@ -519,58 +536,58 @@ class openOrder extends webServiceServer {
       }
       else {
         $ubf = new DOMDocument('1.0', 'utf-8');
-        $order = $this->add_ubf_node($ubf, $ubf, 'order', '', TRUE);
-        $this->add_ubf_node($ubf, $order, 'articleDirect', $param->articleDirect->_value);
-        $this->add_ubf_node($ubf, $order, 'author', $param->author->_value);
-        $this->add_ubf_node($ubf, $order, 'authorOfComponent', $param->authorOfComponent->_value);
-        $this->add_ubf_node($ubf, $order, 'bibliographicCategory', $param->bibliographicCategory->_value);
-        $this->add_ubf_node($ubf, $order, 'bibliographicRecordAgencyId', $param->bibliographicRecordAgencyId->_value);
-        $this->add_ubf_node($ubf, $order, 'bibliographicRecordId', $param->bibliographicRecordId->_value);
-        $this->add_ubf_node($ubf, $order, 'callNumber', $param->callNumber->_value);  // ??
-        $this->add_ubf_node($ubf, $order, 'copy', $param->copy->_value);
-        $this->add_ubf_node($ubf, $order, 'edition', $param->edition->_value);  // ??
-        $this->add_ubf_node($ubf, $order, 'exactEdition', $param->exactEdition->_value);
-        $this->add_ubf_node($ubf, $order, 'fullTextLink', $param->fullTextLink->_value);
-        $this->add_ubf_node($ubf, $order, 'fullTextLinkType', $param->fullTextLinkType->_value);
-        $this->add_ubf_node($ubf, $order, 'isbn', $param->isbn->_value);
-        $this->add_ubf_node($ubf, $order, 'issn', $param->issn->_value);
-        $this->add_ubf_node($ubf, $order, 'issue', $param->issue->_value);
-        $this->add_ubf_node($ubf, $order, 'itemId', $param->itemId->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'language', $param->language->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'latestRequesterNote', $param->requesterNote->_value);
-        $this->add_ubf_node($ubf, $order, 'localHoldingsId', $param->localHoldingsId->_value);
-        $this->add_ubf_node($ubf, $order, 'mediumType', $param->mediumType->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'needBeforeDate', $param->needBeforeDate->_value);
-        $this->add_ubf_node($ubf, $order, 'orderId', $param->orderId->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'orderSystem', $param->orderSystem->_value);
-        $this->add_ubf_node($ubf, $order, 'pagination', $param->pagination->_value);
+        $order = self::add_ubf_node($ubf, $ubf, 'order', '', TRUE);
+        self::add_ubf_node($ubf, $order, 'articleDirect', $param->articleDirect->_value);
+        self::add_ubf_node($ubf, $order, 'author', $param->author->_value);
+        self::add_ubf_node($ubf, $order, 'authorOfComponent', $param->authorOfComponent->_value);
+        self::add_ubf_node($ubf, $order, 'bibliographicCategory', $param->bibliographicCategory->_value);
+        self::add_ubf_node($ubf, $order, 'bibliographicRecordAgencyId', $param->bibliographicRecordAgencyId->_value);
+        self::add_ubf_node($ubf, $order, 'bibliographicRecordId', $param->bibliographicRecordId->_value);
+        self::add_ubf_node($ubf, $order, 'callNumber', $param->callNumber->_value);  // ??
+        self::add_ubf_node($ubf, $order, 'copy', $param->copy->_value);
+        self::add_ubf_node($ubf, $order, 'edition', $param->edition->_value);  // ??
+        self::add_ubf_node($ubf, $order, 'exactEdition', $param->exactEdition->_value);
+        self::add_ubf_node($ubf, $order, 'fullTextLink', $param->fullTextLink->_value);
+        self::add_ubf_node($ubf, $order, 'fullTextLinkType', $param->fullTextLinkType->_value);
+        self::add_ubf_node($ubf, $order, 'isbn', $param->isbn->_value);
+        self::add_ubf_node($ubf, $order, 'issn', $param->issn->_value);
+        self::add_ubf_node($ubf, $order, 'issue', $param->issue->_value);
+        self::add_ubf_node($ubf, $order, 'itemId', $param->itemId->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'language', $param->language->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'latestRequesterNote', $param->requesterNote->_value);
+        self::add_ubf_node($ubf, $order, 'localHoldingsId', $param->localHoldingsId->_value);
+        self::add_ubf_node($ubf, $order, 'mediumType', $param->mediumType->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'needBeforeDate', $param->needBeforeDate->_value);
+        self::add_ubf_node($ubf, $order, 'orderId', $param->orderId->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'orderSystem', $param->orderSystem->_value);
+        self::add_ubf_node($ubf, $order, 'pagination', $param->pagination->_value);
         foreach ($param->pid as $p)
-          $this->add_ubf_node($ubf, $order, 'pid', $p->_value);
-        $this->add_ubf_node($ubf, $order, 'pickUpAgencyId', $this->strip_agency($param->pickUpAgencyId->_value));
-        $this->add_ubf_node($ubf, $order, 'pickUpAgencySubdivision', $param->pickUpAgencySubdivision->_value);
-        $this->add_ubf_node($ubf, $order, 'placeOfPublication', $param->placeOfPublication->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'publicationDate', $param->publicationDate->_value);
-        $this->add_ubf_node($ubf, $order, 'publicationDateOfComponent', $param->publicationDateOfComponent->_value);
-        $this->add_ubf_node($ubf, $order, 'publisher', $param->publisher->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'requesterId', $param->requesterId->_value);
-        $this->add_ubf_node($ubf, $order, 'responderId', $param->responderId->_value);
-        $this->add_ubf_node($ubf, $order, 'seriesTitelNumber', $param->seriesTitelNumber->_value);
-        $this->add_ubf_node($ubf, $order, 'serviceRequester', $param->serviceRequester->_value);
-        $this->add_ubf_node($ubf, $order, 'title', $param->title->_value);
-        $this->add_ubf_node($ubf, $order, 'titleOfComponent', $param->titleOfComponent->_value);
-        $this->add_ubf_node($ubf, $order, 'userAddress', $param->userAddress->_value);
-        $this->add_ubf_node($ubf, $order, 'userAgencyId', $param->userAgencyId->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'userDateOfBirth', $param->userDateOfBirth->_value);
-        $this->add_ubf_node($ubf, $order, 'userId', $param->userId->_value);
+          self::add_ubf_node($ubf, $order, 'pid', $p->_value);
+        self::add_ubf_node($ubf, $order, 'pickUpAgencyId', self::strip_agency($param->pickUpAgencyId->_value));
+        self::add_ubf_node($ubf, $order, 'pickUpAgencySubdivision', $param->pickUpAgencySubdivision->_value);
+        self::add_ubf_node($ubf, $order, 'placeOfPublication', $param->placeOfPublication->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'publicationDate', $param->publicationDate->_value);
+        self::add_ubf_node($ubf, $order, 'publicationDateOfComponent', $param->publicationDateOfComponent->_value);
+        self::add_ubf_node($ubf, $order, 'publisher', $param->publisher->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'requesterId', $param->requesterId->_value);
+        self::add_ubf_node($ubf, $order, 'responderId', $param->responderId->_value);
+        self::add_ubf_node($ubf, $order, 'seriesTitelNumber', $param->seriesTitelNumber->_value);
+        self::add_ubf_node($ubf, $order, 'serviceRequester', $param->serviceRequester->_value);
+        self::add_ubf_node($ubf, $order, 'title', $param->title->_value);
+        self::add_ubf_node($ubf, $order, 'titleOfComponent', $param->titleOfComponent->_value);
+        self::add_ubf_node($ubf, $order, 'userAddress', $param->userAddress->_value);
+        self::add_ubf_node($ubf, $order, 'userAgencyId', $param->userAgencyId->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'userDateOfBirth', $param->userDateOfBirth->_value);
+        self::add_ubf_node($ubf, $order, 'userId', $param->userId->_value);
         if ($param->userId->_value)
-          $this->add_ubf_node($ubf, $order, 'userIdAuthenticated', $this->xs_boolean($param->userIdAuthenticated->_value) ? 'yes' : 'no');
-        $this->add_ubf_node($ubf, $order, 'userIdType', $param->userIdType->_value);
-        $this->add_ubf_node($ubf, $order, 'userMail', $param->userMail->_value);
-        $this->add_ubf_node($ubf, $order, 'userName', $param->userName->_value);
-        $this->add_ubf_node($ubf, $order, 'userReferenceSource', $param->userReferenceSource->_value);		// ??
-        $this->add_ubf_node($ubf, $order, 'userTelephone', $param->userTelephone->_value);
-        $this->add_ubf_node($ubf, $order, 'verificationReferenceSource', $param->verificationReferenceSource->_value);
-        $this->add_ubf_node($ubf, $order, 'volume', $param->volume->_value);
+          self::add_ubf_node($ubf, $order, 'userIdAuthenticated', self::xs_boolean($param->userIdAuthenticated->_value) ? 'yes' : 'no');
+        self::add_ubf_node($ubf, $order, 'userIdType', $param->userIdType->_value);
+        self::add_ubf_node($ubf, $order, 'userMail', $param->userMail->_value);
+        self::add_ubf_node($ubf, $order, 'userName', $param->userName->_value);
+        self::add_ubf_node($ubf, $order, 'userReferenceSource', $param->userReferenceSource->_value);		// ??
+        self::add_ubf_node($ubf, $order, 'userTelephone', $param->userTelephone->_value);
+        self::add_ubf_node($ubf, $order, 'verificationReferenceSource', $param->verificationReferenceSource->_value);
+        self::add_ubf_node($ubf, $order, 'volume', $param->volume->_value);
 
         $ubf_xml = $ubf->saveXML();
         //echo 'ubf: <pre>' . $ubf_xml . "</pre>\n"; die();
@@ -585,7 +602,7 @@ class openOrder extends webServiceServer {
           $por->orderNotPlaced->_value->placeOrderError->_value = 'invalid_order';
         }
         else {
-          if ($tgt_ref = $this->es_xmlupdate($ubf_xml, TRUE)) {
+          if ($tgt_ref = self::es_xmlupdate($ubf_xml, TRUE)) {
             $por->orderPlaced->_value->orderId->_value = $tgt_ref;
             if ($policy['orderPossibleReason']) {
               $notemap = $this->config->get_value('notemap', 'textmaps');
@@ -650,20 +667,20 @@ class openOrder extends webServiceServer {
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $rr->error->_value = 'authentication_error';
     elseif (in_array($param->messageType->_value, array('orsEndUserRequest', 'orsReceipt'))
-        && !$this->check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
       $rr->error->_value = 'operation not authorized for specified requesterId';
     }
     elseif ($param->messageType->_value == 'orsInterLibraryRequest' 
-        && !$this->check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
       $rr->error->_value = 'operation not authorized for specified responderId';
     }
     else {
       $ubf = new DOMDocument('1.0', 'utf-8');
-      $resend = $this->add_ubf_node($ubf, $ubf, 'resend', '', TRUE);
-      $this->add_ubf_node($ubf, $resend, 'messageType', $param->messageType->_value);
-      $this->add_ubf_node($ubf, $resend, 'orderId', $param->orderId->_value);
-      $this->add_ubf_node($ubf, $resend, 'requesterId', $param->requesterId->_value);
-      $this->add_ubf_node($ubf, $resend, 'serviceRequester', $param->serviceRequester->_value);
+      $resend = self::add_ubf_node($ubf, $ubf, 'resend', '', TRUE);
+      self::add_ubf_node($ubf, $resend, 'messageType', $param->messageType->_value);
+      self::add_ubf_node($ubf, $resend, 'orderId', $param->orderId->_value);
+      self::add_ubf_node($ubf, $resend, 'requesterId', $param->requesterId->_value);
+      self::add_ubf_node($ubf, $resend, 'serviceRequester', $param->serviceRequester->_value);
 
       $ubf_xml = $ubf->saveXML();
       if ($this->validate['ubf'] && !$this->validate_xml($ubf_xml, $this->validate['ubf'])) {
@@ -671,7 +688,7 @@ class openOrder extends webServiceServer {
         verbose::log(FATAL, 'openorder:: answer: ' . $rr->error->_value);
       }
       else {
-        if ($this->es_xmlupdate($ubf_xml)) {
+        if (self::es_xmlupdate($ubf_xml)) {
           $rr->updateStatus->_value = 'update_sent';
         } else {
           $rr->error->_value = 'service_error';
@@ -707,21 +724,21 @@ class openOrder extends webServiceServer {
     $sr = &$ret->shippedResponse->_value;
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $sr->error->_value = 'authentication_error';
-    elseif (!$this->check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+    elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
       $sr->error->_value = 'operation not authorized for specified responderId';
     }
     else {
       $ubf = new DOMDocument('1.0', 'utf-8');
-      $shipped = $this->add_ubf_node($ubf, $ubf, 'shipped', '', TRUE);
-      $this->add_ubf_node($ubf, $shipped, 'creationDate', $param->creationDate->_value);
-      $this->add_ubf_node($ubf, $shipped, 'dateDue', $param->dateDue->_value);
-      $this->add_ubf_node($ubf, $shipped, 'itemId', $param->itemId->_value);
-      $this->add_ubf_node($ubf, $shipped, 'orderId', $param->orderId->_value);
-      $this->add_ubf_node($ubf, $shipped, 'requesterId', $param->requesterId->_value);
-      $this->add_ubf_node($ubf, $shipped, 'responderId', $param->responderId->_value);
-      $this->add_ubf_node($ubf, $shipped, 'serviceRequester', $param->serviceRequester->_value);
-      $this->add_ubf_node($ubf, $shipped, 'shippedDate', $param->shippedDate->_value);
-      $this->add_ubf_node($ubf, $shipped, 'shippedServiceType', $param->shippedServiceType->_value);
+      $shipped = self::add_ubf_node($ubf, $ubf, 'shipped', '', TRUE);
+      self::add_ubf_node($ubf, $shipped, 'creationDate', $param->creationDate->_value);
+      self::add_ubf_node($ubf, $shipped, 'dateDue', $param->dateDue->_value);
+      self::add_ubf_node($ubf, $shipped, 'itemId', $param->itemId->_value);
+      self::add_ubf_node($ubf, $shipped, 'orderId', $param->orderId->_value);
+      self::add_ubf_node($ubf, $shipped, 'requesterId', $param->requesterId->_value);
+      self::add_ubf_node($ubf, $shipped, 'responderId', $param->responderId->_value);
+      self::add_ubf_node($ubf, $shipped, 'serviceRequester', $param->serviceRequester->_value);
+      self::add_ubf_node($ubf, $shipped, 'shippedDate', $param->shippedDate->_value);
+      self::add_ubf_node($ubf, $shipped, 'shippedServiceType', $param->shippedServiceType->_value);
 
       $ubf_xml = $ubf->saveXML();
       if ($this->validate['ubf'] && !$this->validate_xml($ubf_xml, $this->validate['ubf'])) {
@@ -729,7 +746,7 @@ class openOrder extends webServiceServer {
         verbose::log(FATAL, 'openorder:: answer: ' . $sr->error->_value);
       }
       else {
-        if ($this->es_xmlupdate($ubf_xml)) {
+        if (self::es_xmlupdate($ubf_xml)) {
           $sr->updateStatus->_value = 'update_sent';
         } else {
           $sr->error->_value = 'service_error';
@@ -767,23 +784,23 @@ class openOrder extends webServiceServer {
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $uor->error->_value = 'authentication_error';
     elseif ((isset($param->closed->_value) || isset($param->requesterOrderState->_value))
-        && !$this->check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
       $uor->error->_value = 'operation not authorized for specified requesterId';
     }
     elseif (isset($param->providerOrderState->_value)
-        && !$this->check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
       $uor->error->_value = 'operation not authorized for specified responderId';
     }
     else {
       $ubf = new DOMDocument('1.0', 'utf-8');
-      $update_order = $this->add_ubf_node($ubf, $ubf, 'updateOrder', '', TRUE);
-      $this->add_ubf_node($ubf, $update_order, 'orderId', $param->orderId->_value);
-      $this->add_ubf_node($ubf, $update_order, 'requesterId', $param->requesterId->_value);
-      $this->add_ubf_node($ubf, $update_order, 'forwardOrderId', $param->forwardOrderId->_value);
-      $this->add_ubf_node($ubf, $update_order, 'closed', $param->closed->_value);
-      $this->add_ubf_node($ubf, $update_order, 'providerOrderState', $param->providerOrderState->_value);
-      $this->add_ubf_node($ubf, $update_order, 'requesterOrderState', $param->requesterOrderState->_value);
-      $this->add_ubf_node($ubf, $update_order, 'serviceRequester', $param->serviceRequester->_value);
+      $update_order = self::add_ubf_node($ubf, $ubf, 'updateOrder', '', TRUE);
+      self::add_ubf_node($ubf, $update_order, 'orderId', $param->orderId->_value);
+      self::add_ubf_node($ubf, $update_order, 'requesterId', $param->requesterId->_value);
+      self::add_ubf_node($ubf, $update_order, 'forwardOrderId', $param->forwardOrderId->_value);
+      self::add_ubf_node($ubf, $update_order, 'closed', $param->closed->_value);
+      self::add_ubf_node($ubf, $update_order, 'providerOrderState', $param->providerOrderState->_value);
+      self::add_ubf_node($ubf, $update_order, 'requesterOrderState', $param->requesterOrderState->_value);
+      self::add_ubf_node($ubf, $update_order, 'serviceRequester', $param->serviceRequester->_value);
 
       $ubf_xml = $ubf->saveXML();
       if ($this->validate['ubf'] && !$this->validate_xml($ubf_xml, $this->validate['ubf'])) {
@@ -791,7 +808,7 @@ class openOrder extends webServiceServer {
         verbose::log(FATAL, 'openorder:: answer: ' . $uor->error->_value);
       }
       else {
-        if ($this->es_xmlupdate($ubf_xml)) {
+        if (self::es_xmlupdate($ubf_xml)) {
           $uor->updateStatus->_value = 'update_sent';
         } else {
           $uor->error->_value = 'service_error';
@@ -820,7 +837,7 @@ class openOrder extends webServiceServer {
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $irss->error->_value = 'authentication_error';
     else {
-      $agency = $this->strip_agency($param->agencyId->_value);
+      $agency = self::strip_agency($param->agencyId->_value);
       require_once('OLS_class_lib/oci_class.php');
       $oci = new Oci($this->config->get_value('redirect_credentials','setup'));
       $oci->set_charset('UTF8');
@@ -861,6 +878,21 @@ class openOrder extends webServiceServer {
 
   /*******************************************************************************/
 
+
+  /** \brief helper function to set object
+   *
+   * return checkArticleDeliveryResponse object
+   */
+  private function set_cadr($state, $details) {
+    $cadr->articleDeliveryPossible->_value = $state;
+    if ($state == 1) {
+      $cadr->articleDirect->_value = $details;
+    }
+    else {
+      $cadr->articleDeliveryPossibleReason->_value = $details;
+    }
+    return $cadr;
+  }
 
   /** \brief Check existance of issn in the copydan table
    *
@@ -943,14 +975,15 @@ class openOrder extends webServiceServer {
   /** \brief Return the issn for a given pid - or FALSE
    * 
    */
-  private function pid_to_issn($pid) {
+  private function pid_to_issn($pid, $agency) {
     $fname = TMP_PATH .  md5($responder_id . microtime(TRUE));
     $os_obj->pid = $pid;
-    $res = $this->exec_order_policy($os_obj, $fname, 'pidToIssn');
-    if ($res['issn'] <> 'undefined') {
-      return $res['issn'];
+    $os_obj->agency = $agency;
+    $res = self::exec_order_policy($os_obj, $fname, 'pidToIssn');
+    if (empty($res['issn'])) {
+      $res['issn'] = 'error_finding_journal';
     }
-    return FALSE;
+    return $res['issn'];
   }
 
   /** \brief Check nonVerifiedIll order policy for a given Agency
@@ -960,7 +993,7 @@ class openOrder extends webServiceServer {
   private function check_nonVerifiedIll_order_policy($responder_id) {
     $fname = TMP_PATH .  md5($responder_id . microtime(TRUE));
     $os_obj->receiverId = $responder_id;
-    return $this->exec_order_policy($os_obj, $fname, 'nonVerifiedIll');
+    return self::exec_order_policy($os_obj, $fname, 'nonVerifiedIll');
   }
 
   /** \brief Check ill order policy for a given Agency
@@ -972,7 +1005,7 @@ class openOrder extends webServiceServer {
     $os_obj->receiverId = $responder_id;
     $os_obj->bibliographicRecordId = $record_id;
     $os_obj->bibliographicRecordAgencyId = $record_agency;
-    return $this->exec_order_policy($os_obj, $fname, 'ill');
+    return self::exec_order_policy($os_obj, $fname, 'ill');
   }
 
   /** \brief Check order policy for a given Agency
@@ -991,7 +1024,7 @@ class openOrder extends webServiceServer {
       }
     }
     $fname = TMP_PATH .  md5($record_id .  $record_agency . $pid_str . $pickup_agency .  $requester . microtime(TRUE));
-    return $this->exec_order_policy($os_obj, $fname);
+    return self::exec_order_policy($os_obj, $fname);
   }
 
   /** \brief wrapper for es xml update - send via z3950 or es Corba Bridge (Henry)
@@ -1099,7 +1132,7 @@ class openOrder extends webServiceServer {
           $ret['lookUpUrls'] = $es_answer->lookupurls;
           $ret['agencyCatalogueUrl'] = $es_answer->agencyCatalogueUrl;
           $ret['agencyCatalogueUrls'] = $es_answer->agencyCatalogueUrls;
-          $ret['orderPossible'] = ($this->xs_boolean($es_answer->willReceive) ? 'TRUE' : 'FALSE');
+          $ret['orderPossible'] = (self::xs_boolean($es_answer->willReceive) ? 'TRUE' : 'FALSE');
           $ret['orderPossibleReason'] = $es_answer->note;
           $ret['orderConditionDanish'] = $es_answer->conditionDanish;
           $ret['orderConditionEnglish'] = $es_answer->conditionEnglish;
@@ -1155,5 +1188,5 @@ class openOrder extends webServiceServer {
 $ws=new openOrder();
 $ws->handle_request();
 
-?>
+
 
