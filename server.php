@@ -190,9 +190,9 @@ class openOrder extends webServiceServer {
             $cadr = self::set_cadr('0', 'no electronic supplier has article');
             break;
           case 'undefined':
-            $cadr = self::set_cadr('0', 'issn not found');
+            $cadr = self::set_cadr('1', 'postal');
             break;
-          case 'error_holding':
+          case 'error_holdings':
             verbose::log(ERROR, 'Error finding holdings. ' . $param->pid->_value . ' for ' . $agency);
             $cadr->error->_value = 'service_error';
             break;
