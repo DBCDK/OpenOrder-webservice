@@ -337,12 +337,13 @@ action[incrementRedirectStat][] = callback
 ;showinfo[] = version:            __version.setup__
 ;showinfo[] = logfile:            __logfile.setup__
 ;showinfo[] = verbose:            __verbose__
-;showinfo[] = agency:             __open_agency__
+;showinfo[] = agency:             __openagency_url__
 ;showinfo[] = order_policy_shell: __order_policy_shell__
 ;showinfo[] = copydan_credentials: __copydan_credentials__
 ;showinfo[] = redirect_credentials: __redirect_credentials__
 ;showinfo[] = aaa_fors_rights:   __aaa_fors_rights__
 ;showinfo[] = aaa_credentials:    __aaa_credentials__
+;showinfo[] = es_target:          __es_target__
 ;showinfo[] = </pre>
 
 [howru]
