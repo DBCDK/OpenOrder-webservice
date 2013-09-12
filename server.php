@@ -181,15 +181,15 @@ class openOrder extends webServiceServer {
         $cadr = self::set_cadr('0', 'no electronic supplier found');
       }
       else {
-        $issn = self::pid_to_issn($param->pid->_value, $agency);
-        switch ($issn) {
+        $policy = self::pid_to_issn($param->pid->_value, $agency);
+        switch ($policy['reason']) {
           case 'not_journal':
             $cadr = self::set_cadr('0', 'article not found');
             break;
           case 'not_in_agency':
             $cadr = self::set_cadr('0', 'no electronic supplier has article');
             break;
-          case 'undefined':
+          case 'no_ISSN':
             $cadr = self::set_cadr('1', 'postal');
             break;
           case 'error_holdings':
@@ -200,13 +200,14 @@ class openOrder extends webServiceServer {
             verbose::log(ERROR, 'Error searching record: ' . $param->pid->_value . ' for ' . $agency);
             $cadr->error->_value = 'service_error';
             break;
-          case 'error_finding_journal':
+          case 'Xerror_finding_journal':
             verbose::log(ERROR, 'Error executing order policy shell: ' . $param->pid->_value . ' for ' . $agency);
             $cadr->error->_value = 'service_error';
             break;
+          case 'OK':
           default:
             try {
-              if (self::find_issn_in_copydan($issn)) {
+              if (self::find_issn_in_copydan($policy['issn'])) {
                 $cadr = self::set_cadr('1', 'electronic');
               }
               else {
@@ -981,9 +982,9 @@ class openOrder extends webServiceServer {
     $os_obj->agency = $agency;
     $res = self::exec_order_policy($os_obj, $fname, 'pidToIssn');
     if (empty($res['issn'])) {
-      $res['issn'] = 'error_finding_journal';
+      $res['reason'] = 'error_finding_journal';
     }
-    return $res['issn'];
+    return $res;
   }
 
   /** \brief Check nonVerifiedIll order policy for a given Agency
