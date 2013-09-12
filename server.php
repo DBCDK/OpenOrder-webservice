@@ -205,7 +205,6 @@ class openOrder extends webServiceServer {
             $cadr->error->_value = 'service_error';
             break;
           case 'OK':
-          default:
             try {
               if (self::find_issn_in_copydan($policy['issn'])) {
                 $cadr = self::set_cadr('1', 'electronic');
@@ -217,6 +216,10 @@ class openOrder extends webServiceServer {
             catch (ociException $e) {
               $cadr->error->_value = $e->getMessage();
             }
+            break;
+          default:
+            verbose::log(ERROR, 'Unknown reason (' . $policy['reason'] . ') returned from policy shell: ' . $param->pid->_value . ' for ' . $agency);
+            $cadr->error->_value = 'service_error';
             break;
         }
       }
