@@ -8,7 +8,7 @@
 ;service_http_error = HTTP/1.0 503 Service Unavailable
 
 
-version = 2.4
+version = 2.5
 
 ; set only_https to accept https call only
 ;only_https = 1
