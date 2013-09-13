@@ -206,7 +206,7 @@ class openOrder extends webServiceServer {
             break;
           case 'OK':
             try {
-              if (self::find_issn_in_copydan($policy['issn'])) {
+              if (($policy['issn'] <> 'undefined') && self::find_issn_in_copydan($policy['issn'])) {
                 $cadr = self::set_cadr('1', 'electronic');
               }
               else {
