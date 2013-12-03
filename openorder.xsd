@@ -843,6 +843,7 @@
 			<xs:enumeration value="service_unavailable"/>
 			<xs:enumeration value="service_error"/>
 			<xs:enumeration value="no_task_found"/>
+			<xs:enumeration value="needBeforeDate must be tomorrow or later"/>
 		</xs:restriction>
 	</xs:simpleType>
 	<xs:simpleType name="fullTextLinkTypeType">
