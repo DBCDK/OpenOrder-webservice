@@ -497,6 +497,9 @@ class openOrder extends webServiceServer {
     elseif (empty($param->serviceRequester->_value)) {
       $por->orderNotPlaced->_value->placeOrderError->_value = 'no_serviceRequester';
     }
+    elseif ($invalid_parms = self::invalid_or_missing_parms($param)) {
+      $por->orderNotPlaced->_value->placeOrderError->_value = $invalid_parms;
+    }
     else {
       if (isset($GLOBALS['HTTP_RAW_POST_DATA']))
         verbose::log(DEBUG, 'openorder:: xml: ' . $GLOBALS['HTTP_RAW_POST_DATA']);
@@ -883,6 +886,17 @@ class openOrder extends webServiceServer {
   /*******************************************************************************/
 
 
+  /** \brief Check date to be valid (after now)
+   *
+   * return NULL or error message
+   */
+  private function invalid_or_missing_parms($param) {
+    if ($nbd = $param->needBeforeDate->_value) {
+      if (strtotime($nbd) <= strtotime('tomorrow')) {
+        return 'needBeforeDate must be tomorrow or later';
+      }
+    }
+  }
   /** \brief helper function to set object
    *
    * return checkArticleDeliveryResponse object
@@ -1081,9 +1095,9 @@ class openOrder extends webServiceServer {
         $this->curl->set_option(CURLOPT_HTTPHEADER, array('Content-Type: text/xml; charset=UTF-8'));
         $f_result = $this->curl->get($target['host']);
         verbose::log(DEBUG, 'openorder:: ' . $target_id . ' result: ' . str_replace("\n", '', print_r($f_result, TRUE)));
-        $curl_err = $this->curl->get_status();
-        if ($curl_err['http_code'] < 200 || $curl_err['http_code'] > 299) {
-          verbose::log(FATAL, 'es_corba_bridge http-error: ' . $curl_err['http_code'] . ' from: ' . $target['bridge']);
+        $curl_status = $this->curl->get_status();
+        if ($curl_status['http_code'] < 200 || $curl_status['http_code'] > 299) {
+          verbose::log(FATAL, 'es_corba_bridge http-error: ' . $curl_status['http_code'] . ' from: ' . $target['bridge']);
           if (!isset($ret)) {
             $ret = ! $need_answer;
           }
@@ -1096,7 +1110,7 @@ class openOrder extends webServiceServer {
                 $ret = $oid->item(0)->nodeValue;
           }
           else {
-            verbose::log(FATAL, 'es_coerba_bridge: Cannot decode answer: ' . $f_result); 
+            verbose::log(FATAL, 'es_corba_bridge: Cannot decode answer: ' . $f_result); 
           }
           if (!isset($ret)) {
             $ret = ! $need_answer;
