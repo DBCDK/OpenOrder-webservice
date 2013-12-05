@@ -331,7 +331,7 @@ class openOrder extends webServiceServer {
                                           $param->pid,
                                           self::strip_agency($param->pickUpAgencyId->_value),
                                           $param->serviceRequester->_value);
-      verbose::log(DEBUG, 'openorder:: policy: ' . print_r($policy, TRUE));
+      verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
       if ($policy['checkOrderPolicyError'])
         $copr->checkOrderPolicyError->_value = $policy['checkOrderPolicyError'];
       else {
@@ -521,7 +521,7 @@ class openOrder extends webServiceServer {
                     $param->bibliographicRecordId->_value,
                     self::strip_agency($param->bibliographicRecordAgencyId->_value),
                     $param->responderId->_value);
-      verbose::log(DEBUG, 'openorder:: policy: ' . print_r($policy, TRUE));
+      verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
       if ($policy['reason']) {
         $reason->_attributes->language->_value = 'dan';
         $reason->_value = $policy['reason'];
@@ -1047,82 +1047,92 @@ class openOrder extends webServiceServer {
 
   /** \brief wrapper for es xml update - send via z3950 or es Corba Bridge (Henry)
    *
-   * return target_reference or FALSE
+   * return target_reference or ! $need_answer
    */
-  private function es_xmlupdate(&$ubf_xml, $need_answer=FALSE) {
+  private function es_xmlupdate($ubf_xml, $need_answer = FALSE) {
     if (!$es_targets = $this->config->get_value('es_target', 'setup')) {
       $es_targets = array();
     }
 
     verbose::log(DEBUG, 'openorder:: ubf: ' . $ubf_xml);
     foreach ($es_targets as $target_id => $target) {
-      if (! $timeout = $target['timeout']) {
-        $timeout = 30;
+      if (empty($target['timeout'])) {
+        $target['timeout'] = 30;
       }
-  // send thru a z3950 NEP
       $this->watch->start($target_id);
       if (($target['protocol'] == 'z3950') && $target['host']) {
-        $z3950 = new z3950();
-        $z3950->set_authentication($target['authentication'], $_SERVER['REMOTE_ADDR']);
-        $z3950->set_target($target['host']);
-        $z_result = $z3950->z3950_xml_update($ubf_xml, $timeout);
-        verbose::log(DEBUG, 'openorder:: ' . $target_id . ' result: ' . str_replace("\n", '', print_r($z_result, TRUE)));
-  // test
-  //          $z_result = Array ("xmlUpdateDoc" => '<ors:orderResponse xmlns:ors="http://oss.dbc.dk/ns/openresourcesharing"><ors:orderId>1000000068</ors:orderId></ors:orderResponse>');
-        if ($z3950->get_errno()) {
-          $this->error_string = $z3950->get_error_string();
-          verbose::log(FATAL, 'openorder:: es_xmlupdate returned error: ' . $this->error_string);
-        }
-        else {
-          if ($resxml = $z_result['xmlUpdateDoc']) {
-            $resdom = new DomDocument();
-            if (@ $resdom->loadXML($resxml))
-              if (($oid = $resdom->getElementsByTagName('orderId')) && !isset($ret))
-                $ret = $oid->item(0)->nodeValue;
-          }
-          if (!isset($ret)) {
-            $ret = ! $need_answer;
-          }
-        }
+        $es_result = self::es_z3950_update($ubf_xml, $target, $error_str);
       }
-    // send thru a http-corba bridge
-      if (($target['protocol'] == 'http') && $target['host']) {
-        if (empty($this->curl)) {
-          $this->curl = new curl();
-        }
-        $this->curl->set_option(CURLOPT_TIMEOUT, $timeout);
-        $this->curl->set_post($ubf_xml);
-        $this->curl->set_option(CURLOPT_HTTPHEADER, array('Content-Type: text/xml; charset=UTF-8'));
-        $f_result = $this->curl->get($target['host']);
-        verbose::log(DEBUG, 'openorder:: ' . $target_id . ' result: ' . str_replace("\n", '', print_r($f_result, TRUE)));
-        $curl_status = $this->curl->get_status();
-        if ($curl_status['http_code'] < 200 || $curl_status['http_code'] > 299) {
-          verbose::log(FATAL, 'es_corba_bridge http-error: ' . $curl_status['http_code'] . ' from: ' . $target['bridge']);
-          if (!isset($ret)) {
-            $ret = ! $need_answer;
-          }
-        }
-        else {
-          if ($result = json_decode($f_result)) {
-            $resdom = new DomDocument();
-            if (@ $resdom->loadXML($result->xml))
-              if (($oid = $resdom->getElementsByTagName('orderId')) && !isset($ret))
-                $ret = $oid->item(0)->nodeValue;
-          }
-          else {
-            verbose::log(FATAL, 'es_corba_bridge: Cannot decode answer: ' . $f_result); 
-          }
-          if (!isset($ret)) {
-            $ret = ! $need_answer;
-          }
-        }
+      elseif (($target['protocol'] == 'http') && $target['host']) {
+        $es_result = self::es_henry_update($ubf_xml, $target, $error_str);
       }
       $this->watch->stop($target_id);
-    }
-    if (!isset($ret)) {
-      $ret = FALSE;
+      if ($es_result) {
+        if (empty($resdom)) {
+          $resdom = new DomDocument();
+        }
+        if (@ $resdom->loadXML($es_result) && ($oid = $resdom->getElementsByTagName('orderId'))) {
+          $tgt_ref = $oid->item(0)->nodeValue;
+        }
+      }
+      if ($need_answer && empty($error_str) && empty($tgt_ref)) {
+        verbose::log(FATAL, 'non valid es_result: ' . $es_result); 
+      }
+      if (!isset($ret)) {          // only result from first target
+        if ($error_str) {
+          $this->error_string = $error_str;
+        }
+        if (! $ret = $tgt_ref) {
+          $ret = ! $need_answer;
+        }
+      }
+      unset($es_result);
+      unset($tgt_ref);
+      unset($error_str);
     }
     return $ret;
+  }
+
+  /** \brief send an es xml update via z3950
+   *
+   * return es_result or NULL
+   */
+  private function es_z3950_update($ubf_xml, $target, &$error_str) {
+    $z3950 = new z3950();
+    $z3950->set_authentication($target['authentication'], $_SERVER['REMOTE_ADDR']);
+    $z3950->set_target($target['host']);
+    $z_result = $z3950->z3950_xml_update($ubf_xml, $target['timeout']);
+    verbose::log(DEBUG, 'openorder(z3950):: ' . $target_id . ' result: ' . str_replace("\n", ' ', print_r($z_result, TRUE)));
+    if ($z3950->get_errno()) {
+      $error_str = $z3950->get_error_string();
+      verbose::log(FATAL, 'openorder:: es_xmlupdate returned error: ' . $error_str);
+    }
+    else {
+      return $z_result['xmlUpdateDoc'];
+    }
+  }
+
+  /** \brief send an es xml update via es Corba Bridge (Henry)
+   *
+   * return es_result or NULL
+   */
+  private function es_henry_update($ubf_xml, $target, &$error_str) {
+    if (empty($this->curl)) {
+      $this->curl = new curl();
+    }
+    $this->curl->set_option(CURLOPT_TIMEOUT, $target['timeout']);
+    $this->curl->set_post($ubf_xml);
+    $this->curl->set_option(CURLOPT_HTTPHEADER, array('Content-Type: text/xml; charset=UTF-8'));
+    $f_result = @ json_decode($this->curl->get($target['host']));
+    verbose::log(DEBUG, 'openorder(http):: ' . $target_id . ' result: ' . str_replace("\n", ' ', print_r($f_result, TRUE)));
+    $curl_status = $this->curl->get_status();
+    if ($curl_status['http_code'] < 200 || $curl_status['http_code'] > 299) {
+      $error_str = 'http-error: ' . $curl_status['http_code'];
+      verbose::log(FATAL, 'openorder:: es_corba_bridge ' . $error_str . ' from: ' . $target['host']);
+    }
+    else {
+      return $f_result->xml;
+    }
   }
 
   /** \brief wrapper for exec of order policy-shell
