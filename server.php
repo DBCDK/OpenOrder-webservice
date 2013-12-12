@@ -326,40 +326,22 @@ class openOrder extends webServiceServer {
     else {
       if (!is_array($param->pid))
         $param->pid = array($param->pid);
+      $pickup_agency = self::strip_agency($param->pickUpAgencyId->_value);
       $policy = self::check_order_policy($param->bibliographicRecordId->_value,
                                           self::strip_agency($param->bibliographicRecordAgencyId->_value),
                                           $param->pid,
-                                          self::strip_agency($param->pickUpAgencyId->_value),
+                                          $pickup_agency,
                                           $param->serviceRequester->_value);
       verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
       if ($policy['checkOrderPolicyError'])
         $copr->checkOrderPolicyError->_value = $policy['checkOrderPolicyError'];
       else {
-        $notemap = $this->config->get_value('notemap', 'textmaps');
-        if ($policy['agencyCatalogueUrl'])
-          $copr->agencyCatalogueUrl->_value = $policy['agencyCatalogueUrl'];
-        if ($policy['lookUpUrls']) {
-          foreach ($policy['lookUpUrls'] as $url) {
-            $copr->lookUpUrl[]->_value = $url;
-          }
-        }
+        self::add_policy_agencyCatalogueUrl($copr, $policy);
+        self::add_policy_lookUpUrls($copr, $policy);
+        self::add_policy_consortia($copr, $policy);
         $copr->orderPossible->_value = $policy['orderPossible'];
-        if ($mapped_note = $notemap[ $policy['lookUpUrls'] ? 'url' : 'nourl' ]
-                           [ strtolower($policy['orderPossible']) ]
-                           [ strtolower($policy['orderPossibleReason']) ])
-          $copr->orderPossibleReason->_value = $mapped_note;
-        else
-          $copr->orderPossibleReason->_value = $policy['orderPossibleReason'];
-        if ($policy['orderConditionDanish']) {
-          $cond_d->_attributes->language->_value = 'dan';
-          $cond_d->_value = $policy['orderConditionDanish'];
-          $copr->orderCondition[] = $cond_d;
-        }
-        if ($policy['orderConditionEnglish']) {
-          $cond_e->_attributes->language->_value = 'eng';
-          $cond_e->_value = $policy['orderConditionEnglish'];
-          $copr->orderCondition[] = $cond_e;
-        }
+        $copr->orderPossibleReason->_value = self::map_ors_order_reason($policy);
+        self::add_policy_orderCondition($copr, $policy);
       }
     }
 
@@ -505,12 +487,13 @@ class openOrder extends webServiceServer {
         verbose::log(DEBUG, 'openorder:: xml: ' . $GLOBALS['HTTP_RAW_POST_DATA']);
       if (!is_array($param->pid))
         $param->pid = array($param->pid);
-      if ($param->pickUpAgencyId->_value) {
+      $pickup_agency = self::strip_agency($param->pickUpAgencyId->_value);
+      if ($pickup_agency) {
         $policy = self::check_order_policy(
                     $param->bibliographicRecordId->_value,
                     self::strip_agency($param->bibliographicRecordAgencyId->_value),
                     $param->pid,
-                    self::strip_agency($param->pickUpAgencyId->_value),
+                    $pickup_agency,
                     $param->serviceRequester->_value);
       }
       elseif ($param->verificationReferenceSource->_value == 'none') {
@@ -530,15 +513,11 @@ class openOrder extends webServiceServer {
         $por->orderNotPlaced->_value->placeOrderError->_value = $policy['checkOrderPolicyError'];
         if ($reason) $por->reason = $reason;
       }
-      elseif ($policy['orderPossible'] != 'TRUE') {
-        if ($policy['agencyCatalogueUrl'])
-          $por->orderNotPlaced->_value->agencyCatalogueUrl->_value = $policy['agencyCatalogueUrl'];
-        if ($policy['lookUpUrls']) {
-          foreach ($policy['lookUpUrls'] as $url) {
-            $por->orderNotPlaced->_value->lookUpUrl[]->_value = $url;
-          }
-        }
-        $por->orderNotPlaced->_value->placeOrderError->_value = $policy['orderPossibleReason'];
+      elseif ($policy['orderPossible'] != 'true') {
+        self::add_policy_agencyCatalogueUrl($por->orderNotPlaced->_value, $policy);
+        self::add_policy_lookUpUrls($por->orderNotPlaced->_value, $policy);
+        self::add_policy_consortia($por->orderNotPlaced->_value, $policy);
+        $por->orderNotPlaced->_value->placeOrderError->_value = self::map_ors_order_reason($policy);
         if ($reason) $por->reason = $reason;
       }
       else {
@@ -599,47 +578,25 @@ class openOrder extends webServiceServer {
         $ubf_xml = $ubf->saveXML();
         //echo 'ubf: <pre>' . $ubf_xml . "</pre>\n"; die();
         if ($this->validate['ubf'] && !$this->validate_xml($ubf_xml, $this->validate['ubf'])) {
-          if ($policy['agencyCatalogueUrl'])
-            $por->orderNotPlaced->_value->agencyCatalogueUrl->_value = $policy['agencyCatalogueUrl'];
-          if ($policy['lookUpUrls']) {
-            foreach ($policy['lookUpUrls'] as $url) {
-              $por->orderNotPlaced->_value->lookUpUrl[]->_value = $url;
-            }
-          }
+          self::add_policy_agencyCatalogueUrl($por->orderNotPlaced->_value, $policy);
+          self::add_policy_lookUpUrls($por->orderNotPlaced->_value, $policy);
+          self::add_policy_consortia($por->orderNotPlaced->_value, $policy);
           $por->orderNotPlaced->_value->placeOrderError->_value = 'invalid_order';
         }
         else {
           if ($tgt_ref = self::es_xmlupdate($ubf_xml, TRUE)) {
             $por->orderPlaced->_value->orderId->_value = $tgt_ref;
             if ($policy['orderPossibleReason']) {
-              $notemap = $this->config->get_value('notemap', 'textmaps');
-              if ($mapped_note = $notemap[ $policy['lookUpUrls'] ? 'url' : 'nourl' ]
-                                 [ 'true' ]
-                                 [ strtolower($policy['orderPossibleReason']) ])
-                $por->orderPlaced->_value->orderPlacedMessage->_value = $mapped_note;
-              else
-                $por->orderPlaced->_value->orderPlacedMessage->_value = $policy['orderPossibleReason'];
+              $por->orderPlaced->_value->orderPlacedMessage->_value = self::map_ors_order_reason($policy);
             }
             else
               $por->orderPlaced->_value->orderPlacedMessage->_value = 'owned_accepted';
-            if ($policy['orderConditionDanish']) {
-              $cond_d->_attributes->language->_value = 'dan';
-              $cond_d->_value = $policy['orderConditionDanish'];
-              $por->orderCondition[] = $cond_d;
-            }
-            if ($policy['orderConditionEnglish']) {
-              $cond_e->_attributes->language->_value = 'eng';
-              $cond_e->_value = $policy['orderConditionEnglish'];
-              $por->orderCondition[] = $cond_e;
-            }
+            self::add_policy_orderCondition($por, $policy);
           }
           else {
             verbose::log(ERROR, 'openorder:: xml_itemorder status: ' . $this->error_string);
-            if ($policy['lookUpUrls']) {
-              foreach ($policy['lookUpUrls'] as $url) {
-                $por->orderNotPlaced->_value->lookUpUrl[]->_value = $url;
-              }
-            }
+            self::add_policy_lookUpUrls($por->orderNotPlaced->_value, $policy);
+            self::add_policy_consortia($por->orderNotPlaced->_value, $policy);
             $por->orderNotPlaced->_value->placeOrderError->_value = 'ORS_error';
           }
           //var_dump($tgt_ref);
@@ -897,6 +854,74 @@ class openOrder extends webServiceServer {
       }
     }
   }
+
+  /** \brief helper function to set object
+   * 
+   * return mapped note (string)
+   */
+  private function map_ors_order_reason($policy) {
+    static $notemap;
+    if (!isset($notemap)) {
+      $notemap = $this->config->get_value('notemap', 'textmaps');
+    }
+    if ($mapped_note = $notemap[ $policy['lookUpUrls'] ? 'url' : 'nourl' ]
+                       [ strtolower($policy['orderPossible']) ]
+                       [ strtolower($policy['orderPossibleReason']) ]) {
+      return $mapped_note;
+    }
+    else {
+      return $policy['orderPossibleReason'];
+    }
+  }
+
+  /** \brief helper function to set object
+   */
+  private function add_policy_agencyCatalogueUrl(&$obj, $policy) {
+    if ($policy['agencyCatalogueUrl'])
+      $obj->agencyCatalogueUrl->_value = $policy['agencyCatalogueUrl'];
+  }
+
+  /** \brief helper function to set object
+   */
+  private function add_policy_lookUpUrls(&$obj, $policy) {
+    if ($policy['lookUpUrls']) {
+      foreach ($policy['lookUpUrls'] as $url) {
+        $obj->lookUpUrl[]->_value = $url;
+      }
+    }
+  }
+
+  /** \brief helper function to set object
+   */
+  private function add_policy_consortia(&$obj, $policy) {
+    if ($policy['consortia']) {
+      foreach ($policy['consortia'] as $consortia) {
+        $obj->lookUpUrl[] = self::val_and_attr($consortia[1], $consortia[0], 'agencyId');
+      }
+    }
+  }
+
+  /** \brief helper function to set object
+   */
+  private function add_policy_orderCondition(&$obj, $policy) {
+    if ($policy['orderConditionDanish']) {
+      $copr->orderCondition[] = self::val_and_attr($policy['orderConditionDanish'], 'dan', 'language');
+    }
+    if ($policy['orderConditionEnglish']) {
+      $copr->orderCondition[] = self::val_and_attr($policy['orderConditionEnglish'], 'eng', 'language');
+    }
+  }
+
+  /** \brief helper function to create and set object
+   */
+  private function val_and_attr($value, $attr_value, $attr_name) {
+    if ($attr_value) {
+      $obj->_attributes->$attr_name->_value = $attr_value;
+    }
+    $obj->_value = $value;
+    return $obj;
+  }
+
   /** \brief helper function to set object
    *
    * return checkArticleDeliveryResponse object
@@ -1152,15 +1177,18 @@ class openOrder extends webServiceServer {
       if ($es_status)
         verbose::log(ERROR, ORDER_POLICY_SHELL . ' returned error-code: ' . $es_status);
       if (is_file($f_out)) {
-        $es_answer = json_decode(file_get_contents($f_out));
+        $f_res = file_get_contents($f_out);
+        verbose::log(DEBUG, 'openorder(exec_order_policy):: ' . $f_res);
+        $es_answer = json_decode($f_res);
         unlink($f_out);
         if ($es_answer) {
           $ret['issn'] = $es_answer->issn;
           $ret['lookUpUrl'] = $es_answer->lookupurl;
           $ret['lookUpUrls'] = $es_answer->lookupurls;
+          $ret['consortia'] = $es_answer->consortia;
           $ret['agencyCatalogueUrl'] = $es_answer->agencyCatalogueUrl;
           $ret['agencyCatalogueUrls'] = $es_answer->agencyCatalogueUrls;
-          $ret['orderPossible'] = (self::xs_boolean($es_answer->willReceive) ? 'TRUE' : 'FALSE');
+          $ret['orderPossible'] = (self::xs_boolean($es_answer->willReceive) ? 'true' : 'false');
           $ret['orderPossibleReason'] = $es_answer->note;
           $ret['orderConditionDanish'] = $es_answer->conditionDanish;
           $ret['orderConditionEnglish'] = $es_answer->conditionEnglish;
