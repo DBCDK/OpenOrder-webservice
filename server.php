@@ -905,10 +905,10 @@ class openOrder extends webServiceServer {
    */
   private function add_policy_orderCondition(&$obj, $policy) {
     if ($policy['orderConditionDanish']) {
-      $copr->orderCondition[] = self::val_and_attr($policy['orderConditionDanish'], 'dan', 'language');
+      $obj->orderCondition[] = self::val_and_attr($policy['orderConditionDanish'], 'dan', 'language');
     }
     if ($policy['orderConditionEnglish']) {
-      $copr->orderCondition[] = self::val_and_attr($policy['orderConditionEnglish'], 'eng', 'language');
+      $obj->orderCondition[] = self::val_and_attr($policy['orderConditionEnglish'], 'eng', 'language');
     }
   }
 
