@@ -168,9 +168,10 @@ class openOrder extends webServiceServer {
     else {
       $agency = '820010';  // sofar only 820010 can deliver electronically
       if ($this->cache) {
-        $cache_key = 'OO_cad_' . $this->version . $param->serviceRequester->_value . 
-                                                  $param->pid->_value . 
-                                                  $agency;
+        $cache_key = 'OO_cad_' . $this->config->get_inifile_hash() . 
+                                 $param->serviceRequester->_value . 
+                                 $param->pid->_value . 
+                                 $agency;
         if ($cached = $this->cache->get($cache_key)) {
           verbose::log(STAT, 'Cache hit');
           return $cached;
@@ -257,9 +258,10 @@ class openOrder extends webServiceServer {
       $agency = '820010';  // sofar only 820010 can deliver electronically
       $issn = self::normalize_issn($param->issn->_value);
       if ($this->cache) {
-        $cache_key = 'OO_ced_' . $this->version . $param->serviceRequester->_value . 
-                                                  $issn . 
-                                                  $agency;
+        $cache_key = 'OO_ced_' . $this->config->get_inifile_hash() . 
+                                 $param->serviceRequester->_value . 
+                                 $issn . 
+                                 $agency;
         if ($cached = $this->cache->get($cache_key)) {
           verbose::log(STAT, 'Cache hit');
           return $cached;
