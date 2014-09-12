@@ -946,6 +946,7 @@
 			<xs:enumeration value="no_serviceRequester"/>
 			<xs:enumeration value="authentication_error"/>
 			<xs:enumeration value="not_owned_accepted_by_consortia"/>
+			<xs:enumeration value="invalid_needBeforeDate"/>
 		</xs:restriction>
 	</xs:simpleType>
 	<xs:simpleType name="providerAnswerType">

@@ -852,7 +852,7 @@ class openOrder extends webServiceServer {
   private function invalid_or_missing_parms($param) {
     if ($nbd = $param->needBeforeDate->_value) {
       if (strtotime($nbd) <= strtotime('tomorrow')) {
-        return 'needBeforeDate must be tomorrow or later';
+        return 'invalid_needBeforeDate';
       }
     }
   }
