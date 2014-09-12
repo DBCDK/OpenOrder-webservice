@@ -120,6 +120,8 @@ dump_timer = openorder(%s)
 ;cache_expire = 60
 
 [textmaps]
+; mapping results to xsd enumeration
+; notemap[lookupurl: ulr/nourl][orderPossible: true/false][Reason: string] = xsd:placeOrderErrorType
 notemap[nourl][true][agency owns material] = owned_accepted
 notemap[url][true][agency owns material] = owned_accepted
 notemap[nourl][true][other agency owns material] = not_owned_ILL_loc
