@@ -8,17 +8,23 @@
 ;service_http_error = HTTP/1.0 503 Service Unavailable
 
 
+; --------------
 version = 2.7
 
+; --------------
 ; set only_https to accept https call only
 ;only_https = 1
 
+; --------------
 ; in_house_domain may use ?ShowInfo and use create_sample form
 ;in_house_domain = .dbc.dk
 
 ; set to TRUE to expose the create_sample form
 ;show_samples = 1
+;show_samples_ip_list = 127.0.0.1
 
+
+; --------------
 ; validate
 ;validate[soap_request] = soap.xsd
 ;validate[request] = openorder.xsd
@@ -26,6 +32,7 @@ version = 2.7
 ;validate[soap_response] = soap.xsd
 ;validate[response] = openorder.xsd
 
+; --------------
 ; soapActions and their corresponding request structure
 ; Can be found in the wsdl but is stated here for convenience
 soapAction[answer] = answerRequest
@@ -39,10 +46,12 @@ soapAction[shipped] = shippedRequest
 soapAction[updateOrder] = updateOrderRequest
 soapAction[incrementRedirectStat] = incrementRedirectStatRequest
 
+; --------------
 ; prefixes and namespaces
 default_namespace_prefix = oo
 xmlns[oo] = http://oss.dbc.dk/ns/openorder
 
+; --------------
 ; openagency
 ; url to openagency
 openagency_url = http://openagency.someserver.dk/?action=pickupAgencyList&agencyId=%s
@@ -51,6 +60,7 @@ openagency_timeout = 20
 ; list of auth-groups which can act on behalf of other libraries
 ;openagency_override = 010100
 
+; --------------
 ;Extend Service target
 ; z3950:
 ; es_target[some_id][protocol] = z3950
@@ -72,6 +82,7 @@ openagency_timeout = 20
 ;es_target[some_http_target][timeout] =  30
 
 
+; --------------
 ; order policy script
 ; This script hides the javascript execution.
 ; If there are more than one version running, the scriptname should contain
@@ -81,24 +92,30 @@ order_policy_shell = /var/www/php_exec/OrderPolicy.sh
 ; path to temp-dir where writing/reading/deleting files are allowed
 tmp_path = /tmp/
 
+; --------------
 ; getTaskStatus regexp for orderId - if matched, requesterId is mandatory
 unique_orderId_mask = 1.........
 
+; --------------
 ; path to xml-examples
 xmldir = ./xml
 
+; --------------
 ; logfile for verbose output
 logfile = /tmp/openorder.log
 
+; --------------
 ; login for copydan table
 copydan_credentials = ora_user/ora_passwd@some.server.dk
 
+; --------------
 ; login to ors for getTaskStatus request
 ;ors_credentials = ora_user/ora_passwd@some.server.dk
 
 ; login for redirect_stat table
 redirect_credentials = ora_user/ora_passwd@some.server.dk
 
+; --------------
 ; set verboselevel
 ;   WARNING - simple warnings
 ;   ERROR   - errors in response
@@ -114,10 +131,13 @@ verbose = WARNING+ERROR+FATAL+STAT+TIMER+TRACE+DEBUG+Z3950+OCI
 ; format for automatic timer dump %s is the soap-action used
 dump_timer = openorder(%s)
 
+; --------------
 ; memcache - enabling this will cache some result for 'cache_expire' seconds
 ;cache_host = localhost
 ;cache_port = 11211
 ;cache_expire = 60
+
+; ==============
 
 [textmaps]
 ; mapping results to xsd enumeration
@@ -130,6 +150,8 @@ notemap[nourl][false][other agency owns material] = not_owned_wrong_ILL_mediumTy
 notemap[nourl][false][no holdings] = not_owned_no_ILL_loc
 notemap[url][false][agency owns material] = owned_own_catalogue
 notemap[nourl][false][not owned accepted by consortia] = not_owned_accepted_by_consortia
+
+; ==============
 
 [aaa]
 ; aaa Authentication, Access control and Accounting
@@ -158,6 +180,8 @@ aaa_ip_rights[dbc][ressource]['netpunkt.dk'] = 500
 ; number of seconds to cache authentication and access rights info
 ;aaa_cache_seconds = 3600
 ;
+
+; ==============
 
 [rest]
 ; REST parameters for SOAPAction
@@ -330,6 +354,8 @@ action[incrementRedirectStat][] = callback
 
 
 
+; ==============
+
 [showinfo]
 ; section to dump setting online
 ; make one or more line to display if ?ShowInfo is part of the url
@@ -348,6 +374,8 @@ action[incrementRedirectStat][] = callback
 ;showinfo[] = aaa_credentials:    __aaa_credentials__
 ;showinfo[] = es_target:          __es_target__
 ;showinfo[] = </pre>
+
+; ==============
 
 [howru]
 ;test[] = checkOrderPolicy&bibliographicRecordId=27670768&bibliographicRecordAgencyId=870970&pickUpAgencyId=716301&serviceRequester=150013
