@@ -93,12 +93,16 @@ class openOrder extends webServiceServer {
    * - updateStatus
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function answer($param) {
     $ar = &$ret->answerResponse->_value;
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $ar->error->_value = 'authentication_error';
     else {
+      $responder_id = self::strip_agency($param->responderId->_value);
     // constraints
       if (empty($param->expectedDelivery->_value) &&
           in_array($param->providerAnswer->_value, array('hold_placed', 'will_supply'))) {
@@ -108,7 +112,7 @@ class openOrder extends webServiceServer {
           in_array($param->providerAnswer->_value, array('', 'unfilled', 'will_supply'))) {
         $ar->error->_value = 'providerAnswerReason is mandatory with specified providerAnswer';
       }
-      elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+      elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $responder_id)) {
         $ar->error->_value = 'operation not authorized for specified responderId';
       }
       else {
@@ -121,8 +125,8 @@ class openOrder extends webServiceServer {
         self::add_ubf_node($ubf, $answer, 'providerAnswerDate', $param->providerAnswerDate->_value);
         self::add_ubf_node($ubf, $answer, 'providerAnswerReason', $param->providerAnswerReason->_value);
         self::add_ubf_node($ubf, $answer, 'providerOrderState', $param->providerOrderState->_value);
-        self::add_ubf_node($ubf, $answer, 'requesterId', $param->requesterId->_value);
-        self::add_ubf_node($ubf, $answer, 'responderId', $param->responderId->_value);
+        self::add_ubf_node($ubf, $answer, 'requesterId', self::strip_agency($param->requesterId->_value));
+        self::add_ubf_node($ubf, $answer, 'responderId', $responder_id);
         self::add_ubf_node($ubf, $answer, 'serviceRequester', $param->serviceRequester->_value);
   
         $ubf_xml = $ubf->saveXML();
@@ -159,6 +163,9 @@ class openOrder extends webServiceServer {
    * - articleDirect
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function checkArticleDelivery($param) {
     $cadr = &$ret->checkArticleDeliveryResponse->_value;
@@ -248,6 +255,9 @@ class openOrder extends webServiceServer {
    * - electronicDeliveryPossibleReason
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function checkElectronicDelivery($param) {
     $cedr = &$ret->checkElectronicDeliveryResponse->_value;
@@ -316,6 +326,9 @@ class openOrder extends webServiceServer {
    * - orderCondition
    * or
    * - checkOrderPolicyError
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function checkOrderPolicy($param) {
     $copr = &$ret->checkOrderPolicyResponse->_value;
@@ -328,11 +341,10 @@ class openOrder extends webServiceServer {
     else {
       if (!is_array($param->pid))
         $param->pid = array($param->pid);
-      $pickup_agency = self::strip_agency($param->pickUpAgencyId->_value);
       $policy = self::check_order_policy($param->bibliographicRecordId->_value,
                                           self::strip_agency($param->bibliographicRecordAgencyId->_value),
                                           $param->pid,
-                                          $pickup_agency,
+                                          self::strip_agency($param->pickUpAgencyId->_value),
                                           $param->serviceRequester->_value);
       verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
       if ($policy['checkOrderPolicyError'])
@@ -367,18 +379,22 @@ class openOrder extends webServiceServer {
    * - taskStatus
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function getTaskStatus($param) {
     $gtsr = &$ret->getTaskStatusResponse->_value;
+    $requester_id = self::strip_agency($param->requesterId->_value);
     if (!$this->aaa->has_right('netpunkt.dk', 500)) {
       $gtsr->error->_value = 'authentication_error';
     }
-    elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
+    elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $requester_id)) {
       $gtsr->error->_value = 'operation not authorized for specified requesterId';
     }
     else {
       $orderId_mask = $this->config->get_value('unique_orderId_mask','setup');
-      if (empty($param->requesterId->_value)
+      if (empty($requester_id)
        && $orderId_mask
        && !preg_match('/^'.$orderId_mask.'$/', $param->orderId->_value)) {
         $gtsr->error->_value = 'requesterId should be specified for the given orderId';
@@ -396,8 +412,8 @@ class openOrder extends webServiceServer {
         }
         try {
           $oci->bind('bind_order_id', $param->orderId->_value);
-          if ($param->requesterId->_value) {
-            $oci->bind('bind_requester_id', $param->requesterId->_value);
+          if ($requester_id) {
+            $oci->bind('bind_requester_id', $requester_id);
             $add_sql = ' AND requesterid = :bind_requester_id';
           }
           $oci->set_query('SELECT taskid, majorstate, result,
@@ -472,6 +488,9 @@ class openOrder extends webServiceServer {
    *   - lookUpUrl (optional)
    *   - placeOrderError
    * - orderCondition
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function placeOrder($param) {
     $por = &$ret->placeOrderResponse->_value;
@@ -490,22 +509,24 @@ class openOrder extends webServiceServer {
       if (!is_array($param->pid))
         $param->pid = array($param->pid);
       $pickup_agency = self::strip_agency($param->pickUpAgencyId->_value);
+      $bibliographic_record_agency_id = self::strip_agency($param->bibliographicRecordAgencyId->_value);
+      $responder_id = self::strip_agency($param->responderId->_value);
       if ($pickup_agency) {
         $policy = self::check_order_policy(
                     $param->bibliographicRecordId->_value,
-                    self::strip_agency($param->bibliographicRecordAgencyId->_value),
+                    $bibliographic_record_agency_id,
                     $param->pid,
                     $pickup_agency,
                     $param->serviceRequester->_value);
       }
       elseif ($param->verificationReferenceSource->_value == 'none') {
-        $policy = self::check_nonVerifiedIll_order_policy($param->responderId->_value);
+        $policy = self::check_nonVerifiedIll_order_policy($responder_id);
       }
       else
         $policy = self::check_ill_order_policy(
                     $param->bibliographicRecordId->_value,
-                    self::strip_agency($param->bibliographicRecordAgencyId->_value),
-                    $param->responderId->_value);
+                    $bibliographic_record_agency_id,
+                    $responder_id);
       verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
       if ($policy['reason']) {
         $reason->_attributes->language->_value = 'dan';
@@ -529,7 +550,7 @@ class openOrder extends webServiceServer {
         self::add_ubf_node($ubf, $order, 'author', $param->author->_value);
         self::add_ubf_node($ubf, $order, 'authorOfComponent', $param->authorOfComponent->_value);
         self::add_ubf_node($ubf, $order, 'bibliographicCategory', $param->bibliographicCategory->_value);
-        self::add_ubf_node($ubf, $order, 'bibliographicRecordAgencyId', $param->bibliographicRecordAgencyId->_value);
+        self::add_ubf_node($ubf, $order, 'bibliographicRecordAgencyId', $bibliographic_record_agency_id);
         self::add_ubf_node($ubf, $order, 'bibliographicRecordId', $param->bibliographicRecordId->_value);
         self::add_ubf_node($ubf, $order, 'callNumber', $param->callNumber->_value);  // ??
         self::add_ubf_node($ubf, $order, 'copy', $param->copy->_value);
@@ -551,14 +572,14 @@ class openOrder extends webServiceServer {
         self::add_ubf_node($ubf, $order, 'pagination', $param->pagination->_value);
         foreach ($param->pid as $p)
           self::add_ubf_node($ubf, $order, 'pid', $p->_value);
-        self::add_ubf_node($ubf, $order, 'pickUpAgencyId', self::strip_agency($param->pickUpAgencyId->_value));
+        self::add_ubf_node($ubf, $order, 'pickUpAgencyId', $pickup_agency);
         self::add_ubf_node($ubf, $order, 'pickUpAgencySubdivision', $param->pickUpAgencySubdivision->_value);
         self::add_ubf_node($ubf, $order, 'placeOfPublication', $param->placeOfPublication->_value);		// ??
         self::add_ubf_node($ubf, $order, 'publicationDate', $param->publicationDate->_value);
         self::add_ubf_node($ubf, $order, 'publicationDateOfComponent', $param->publicationDateOfComponent->_value);
         self::add_ubf_node($ubf, $order, 'publisher', $param->publisher->_value);		// ??
-        self::add_ubf_node($ubf, $order, 'requesterId', $param->requesterId->_value);
-        self::add_ubf_node($ubf, $order, 'responderId', $param->responderId->_value);
+        self::add_ubf_node($ubf, $order, 'requesterId', self::strip_agency($param->requesterId->_value));
+        self::add_ubf_node($ubf, $order, 'responderId', $responder_id);
         self::add_ubf_node($ubf, $order, 'seriesTitelNumber', $param->seriesTitelNumber->_value);
         self::add_ubf_node($ubf, $order, 'serviceRequester', $param->serviceRequester->_value);
         self::add_ubf_node($ubf, $order, 'title', $param->title->_value);
@@ -627,17 +648,22 @@ class openOrder extends webServiceServer {
    * - updateStatus
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function resend($param) {
     $rr = &$ret->resendResponse->_value;
+    $requester_id = self::strip_agency($param->requesterId->_value);
+    $responder_id = self::strip_agency($param->responderId->_value);
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $rr->error->_value = 'authentication_error';
     elseif (in_array($param->messageType->_value, array('orsEndUserRequest', 'orsReceipt'))
-        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $requester_id)) {
       $rr->error->_value = 'operation not authorized for specified requesterId';
     }
     elseif ($param->messageType->_value == 'orsInterLibraryRequest' 
-        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $responder_id)) {
       $rr->error->_value = 'operation not authorized for specified responderId';
     }
     else {
@@ -645,7 +671,7 @@ class openOrder extends webServiceServer {
       $resend = self::add_ubf_node($ubf, $ubf, 'resend', '', TRUE);
       self::add_ubf_node($ubf, $resend, 'messageType', $param->messageType->_value);
       self::add_ubf_node($ubf, $resend, 'orderId', $param->orderId->_value);
-      self::add_ubf_node($ubf, $resend, 'requesterId', $param->requesterId->_value);
+      self::add_ubf_node($ubf, $resend, 'requesterId', $requester_id);
       self::add_ubf_node($ubf, $resend, 'serviceRequester', $param->serviceRequester->_value);
 
       $ubf_xml = $ubf->saveXML();
@@ -685,12 +711,16 @@ class openOrder extends webServiceServer {
    * - updateStatus
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function shipped($param) {
     $sr = &$ret->shippedResponse->_value;
+    $responder_id = self::strip_agency($param->responderId->_value);
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $sr->error->_value = 'authentication_error';
-    elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+    elseif (!self::check_library_group($param->authentication->_value->groupIdAut->_value, $responder_id)) {
       $sr->error->_value = 'operation not authorized for specified responderId';
     }
     else {
@@ -700,8 +730,8 @@ class openOrder extends webServiceServer {
       self::add_ubf_node($ubf, $shipped, 'dateDue', $param->dateDue->_value);
       self::add_ubf_node($ubf, $shipped, 'itemId', $param->itemId->_value);
       self::add_ubf_node($ubf, $shipped, 'orderId', $param->orderId->_value);
-      self::add_ubf_node($ubf, $shipped, 'requesterId', $param->requesterId->_value);
-      self::add_ubf_node($ubf, $shipped, 'responderId', $param->responderId->_value);
+      self::add_ubf_node($ubf, $shipped, 'requesterId', self::strip_agency($param->requesterId->_value));
+      self::add_ubf_node($ubf, $shipped, 'responderId', $responder_id);
       self::add_ubf_node($ubf, $shipped, 'serviceRequester', $param->serviceRequester->_value);
       self::add_ubf_node($ubf, $shipped, 'shippedDate', $param->shippedDate->_value);
       self::add_ubf_node($ubf, $shipped, 'shippedServiceType', $param->shippedServiceType->_value);
@@ -744,24 +774,29 @@ class openOrder extends webServiceServer {
    * - updateStatus
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function updateOrder($param) {
     $uor = &$ret->updateOrderResponse->_value;
+    $requester_id = self::strip_agency($param->requesterId->_value);
+    $responder_id = self::strip_agency($param->responderId->_value);
     if (!$this->aaa->has_right('netpunkt.dk', 500))
       $uor->error->_value = 'authentication_error';
     elseif ((isset($param->closed->_value) || isset($param->requesterOrderState->_value))
-        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->requesterId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $requester_id)) {
       $uor->error->_value = 'operation not authorized for specified requesterId';
     }
     elseif (isset($param->providerOrderState->_value)
-        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $param->responderId->_value)) {
+        && !self::check_library_group($param->authentication->_value->groupIdAut->_value, $responder_id)) {
       $uor->error->_value = 'operation not authorized for specified responderId';
     }
     else {
       $ubf = new DOMDocument('1.0', 'utf-8');
       $update_order = self::add_ubf_node($ubf, $ubf, 'updateOrder', '', TRUE);
       self::add_ubf_node($ubf, $update_order, 'orderId', $param->orderId->_value);
-      self::add_ubf_node($ubf, $update_order, 'requesterId', $param->requesterId->_value);
+      self::add_ubf_node($ubf, $update_order, 'requesterId', $requester_id);
       self::add_ubf_node($ubf, $update_order, 'forwardOrderId', $param->forwardOrderId->_value);
       self::add_ubf_node($ubf, $update_order, 'closed', $param->closed->_value);
       self::add_ubf_node($ubf, $update_order, 'providerOrderState', $param->providerOrderState->_value);
@@ -797,6 +832,9 @@ class openOrder extends webServiceServer {
    * - incrementRedirectStatStatus
    * or
    * - error
+   *
+   * @param object $param - user given parameters
+   * @retval object 
    */
   public function incrementRedirectStat($param) {
     $irss = &$ret->incrementRedirectStatResponse->_value;
@@ -847,7 +885,8 @@ class openOrder extends webServiceServer {
 
   /** \brief Check date to be valid (after now)
    *
-   * return NULL or error message
+   * @param object $param - user given parameters
+   * @retval mixed - NULL or error message
    */
   private function invalid_or_missing_parms($param) {
     if ($nbd = $param->needBeforeDate->_value) {
@@ -859,7 +898,8 @@ class openOrder extends webServiceServer {
 
   /** \brief helper function to set object
    * 
-   * return mapped note (string)
+   * @param object $policy
+   * @retval string - mapped note (string)
    */
   private function map_ors_order_reason($policy) {
     static $notemap;
@@ -872,11 +912,14 @@ class openOrder extends webServiceServer {
       return $mapped_note;
     }
     else {
-      return $policy['orderPossibleReason'];
+      verbose::log(ERROR, 'OpenOrder('.__LINE__.'):: Unknown ORS-error: ' . $policy['orderPossibleReason']);
+      return 'ORS_error';
     }
   }
 
   /** \brief helper function to set object
+   * @param object $obj
+   * @param object $policy
    */
   private function add_policy_agencyCatalogueUrl(&$obj, $policy) {
     if ($policy['agencyCatalogueUrl'])
@@ -884,6 +927,8 @@ class openOrder extends webServiceServer {
   }
 
   /** \brief helper function to set object
+   * @param object $obj
+   * @param object $policy
    */
   private function add_policy_lookUpUrls(&$obj, $policy) {
     if ($policy['lookUpUrls']) {
@@ -894,6 +939,8 @@ class openOrder extends webServiceServer {
   }
 
   /** \brief helper function to set object
+   * @param object $obj
+   * @param object $policy
    */
   private function add_policy_consortia(&$obj, $policy) {
     if ($policy['consortia']) {
@@ -904,6 +951,8 @@ class openOrder extends webServiceServer {
   }
 
   /** \brief helper function to set object
+   * @param object $obj
+   * @param object $policy
    */
   private function add_policy_orderCondition(&$obj, $policy) {
     if ($policy['orderConditionDanish']) {
@@ -915,6 +964,10 @@ class openOrder extends webServiceServer {
   }
 
   /** \brief helper function to create and set object
+   * @param string $value
+   * @param string $attr_value
+   * @param string $attr_name
+   * @retval object 
    */
   private function val_and_attr($value, $attr_value, $attr_name) {
     if ($attr_value) {
@@ -926,7 +979,9 @@ class openOrder extends webServiceServer {
 
   /** \brief helper function to set object
    *
-   * return checkArticleDeliveryResponse object
+   * @param string $state
+   * @param string $details
+   * @retval object 
    */
   private function set_cadr($state, $details) {
     $cadr->articleDeliveryPossible->_value = $state;
@@ -941,7 +996,8 @@ class openOrder extends webServiceServer {
 
   /** \brief Check existance of issn in the copydan table
    *
-   * return the found row or FALSE
+   * @param string $issn
+   * @retval mixed - the found row or FALSE
    */
   private function find_issn_in_copydan($issn) {
     require_once('OLS_class_lib/oci_class.php');
@@ -969,7 +1025,9 @@ class openOrder extends webServiceServer {
 
   /** \brief Checks if branch_id is part of agency_id
    *
-   * return boolean
+   * @param string $agency_id
+   * @param string $branch_id
+   * @retval boolean 
    */
   private function check_library_group($agency_id, $branch_id) {
     // simple case
@@ -1007,7 +1065,12 @@ class openOrder extends webServiceServer {
 
   /** \brief Adds a ubf-text-node to a DOMDocument
    *
-   * return the node created
+   * @param domDocument $dom
+   * @param domNode $node
+   * @param string $tag
+   * @param string $value
+   * @param boolean $create_empty_tag
+   * @retval object - the node created
    */
   private function add_ubf_node(&$dom, &$node, $tag, $value='', $create_empty_tag=FALSE) {
     if ($value || $create_empty_tag) {
@@ -1019,6 +1082,9 @@ class openOrder extends webServiceServer {
 
   /** \brief Return the issn for a given pid - or FALSE
    * 
+   * @param string $pid
+   * @param string $agency
+   * @retval array
    */
   private function pid_to_issn($pid, $agency) {
     $fname = TMP_PATH .  md5($responder_id . microtime(TRUE));
@@ -1033,7 +1099,8 @@ class openOrder extends webServiceServer {
 
   /** \brief Check nonVerifiedIll order policy for a given Agency
    *
-   * return error-array or false
+   * @param string $responder_id
+   * @retval mixed - array or FALSE
    */
   private function check_nonVerifiedIll_order_policy($responder_id) {
     $fname = TMP_PATH .  md5($responder_id . microtime(TRUE));
@@ -1043,7 +1110,10 @@ class openOrder extends webServiceServer {
 
   /** \brief Check ill order policy for a given Agency
    *
-   * return error-array or false
+   * @param string $record_id
+   * @param string $record_agency
+   * @param string $responder_id
+   * @retval mixed - array or FALSE
    */
   private function check_ill_order_policy($record_id, $record_agency, $responder_id) {
     $fname = TMP_PATH .  md5($record_id .  $record_agency . $responder_id . microtime(TRUE));
@@ -1055,7 +1125,12 @@ class openOrder extends webServiceServer {
 
   /** \brief Check order policy for a given Agency
    *
-   * return error-array or false
+   * @param string $record_id
+   * @param string $record_agency
+   * @param array $pids
+   * @param string $pickup_agency
+   * @param string $requester
+   * @retval mixed - array or FALSE
    */
   private function check_order_policy($record_id, $record_agency, $pids, $pickup_agency, $requester) {
     $os_obj->serviceRequester = $requester;
@@ -1074,7 +1149,9 @@ class openOrder extends webServiceServer {
 
   /** \brief wrapper for es xml update - send via z3950 or es Corba Bridge (Henry)
    *
-   * return target_reference or ! $need_answer
+   * @param string $ubf_xml
+   * @param boolean $need_answer
+   * @retval mixed - target_reference or ! $need_answer
    */
   private function es_xmlupdate($ubf_xml, $need_answer = FALSE) {
     if (!$es_targets = $this->config->get_value('es_target', 'setup')) {
@@ -1122,7 +1199,10 @@ class openOrder extends webServiceServer {
 
   /** \brief send an es xml update via z3950
    *
-   * return es_result or NULL
+   * @param string $ubf_xml
+   * @param array $target
+   * @param string $error_str
+   * @retval mixed - es_result or NULL
    */
   private function es_z3950_update($ubf_xml, $target, &$error_str) {
     $z3950 = new z3950();
@@ -1141,7 +1221,10 @@ class openOrder extends webServiceServer {
 
   /** \brief send an es xml update via es Corba Bridge (Henry)
    *
-   * return es_result or NULL
+   * @param string $ubf_xml
+   * @param array $target
+   * @param string $error_str
+   * @retval mixed - es_result or NULL
    */
   private function es_henry_update($ubf_xml, $target, &$error_str) {
     if (empty($this->curl)) {
