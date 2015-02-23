@@ -16,6 +16,13 @@ version = 2.7
 ;only_https = 1
 
 ; --------------
+; wsdl for service
+wsdl = openorder.wsdl
+
+;service location used as endpoint in the wsdl-file
+service_location = openorder.addi.dk/2.7/
+
+; --------------
 ; in_house_domain may use ?ShowInfo and use create_sample form
 ;in_house_domain = .dbc.dk
 
