@@ -511,7 +511,18 @@ class openOrder extends webServiceServer {
       $pickup_agency = self::strip_agency($param->pickUpAgencyId->_value);
       $bibliographic_record_agency_id = self::strip_agency($param->bibliographicRecordAgencyId->_value);
       $responder_id = self::strip_agency($param->responderId->_value);
-      if ($pickup_agency) {
+      if ($responder_id) {
+        if ($param->verificationReferenceSource->_value == 'none') {
+          $policy = self::check_nonVerifiedIll_order_policy($responder_id);
+        }
+        else {
+          $policy = self::check_ill_order_policy(
+                      $param->bibliographicRecordId->_value,
+                      $bibliographic_record_agency_id,
+                      $responder_id);
+        }
+      }
+      else {
         $policy = self::check_order_policy(
                     $param->bibliographicRecordId->_value,
                     $bibliographic_record_agency_id,
@@ -519,14 +530,6 @@ class openOrder extends webServiceServer {
                     $pickup_agency,
                     $param->serviceRequester->_value);
       }
-      elseif ($param->verificationReferenceSource->_value == 'none') {
-        $policy = self::check_nonVerifiedIll_order_policy($responder_id);
-      }
-      else
-        $policy = self::check_ill_order_policy(
-                    $param->bibliographicRecordId->_value,
-                    $bibliographic_record_agency_id,
-                    $responder_id);
       verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
       if ($policy['reason']) {
         $reason->_attributes->language->_value = 'dan';
@@ -1263,7 +1266,7 @@ class openOrder extends webServiceServer {
         verbose::log(ERROR, ORDER_POLICY_SHELL . ' returned error-code: ' . $es_status);
       if (is_file($f_out)) {
         $f_res = file_get_contents($f_out);
-        verbose::log(DEBUG, 'openorder(exec_order_policy):: ' . $f_res);
+        verbose::log(DEBUG, 'openorder(exec_order_policy):: par: ' . $par . ' in: ' . json_encode($os_obj) . ' out:' . $f_res);
         $es_answer = json_decode($f_res);
         unlink($f_out);
         if ($es_answer) {
