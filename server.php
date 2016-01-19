@@ -1090,7 +1090,7 @@ class openOrder extends webServiceServer {
    * @retval array
    */
   private function pid_to_issn($pid, $agency) {
-    $fname = TMP_PATH .  md5($responder_id . microtime(TRUE));
+    $fname = TMP_PATH .  md5($pid . $agency . microtime(TRUE));
     $os_obj->pid = $pid;
     $os_obj->agency = $agency;
     $res = self::exec_order_policy($os_obj, $fname, 'pidToIssn');
