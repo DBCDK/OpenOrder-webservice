@@ -1077,7 +1077,7 @@ class openOrder extends webServiceServer {
    */
   private function add_ubf_node(&$dom, &$node, $tag, $value='', $create_empty_tag=FALSE) {
     if ($value || $create_empty_tag) {
-      $help = $dom->createElementNS('http://www.dbc.dk/ubf', 'ubf:'.$tag, $value);
+      $help = $dom->createElementNS('http://www.dbc.dk/ubf', 'ubf:'.$tag, htmlspecialchars($value));
       $help = $node->appendChild($help);
       return $help;
     }
