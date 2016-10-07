@@ -345,6 +345,7 @@ class openOrder extends webServiceServer {
                                           self::strip_agency($param->bibliographicRecordAgencyId->_value),
                                           $param->pid,
                                           self::strip_agency($param->pickUpAgencyId->_value),
+                                          self::strip_agency($param->responderId->_value),
                                           $param->serviceRequester->_value);
       verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
       if ($policy['checkOrderPolicyError'])
@@ -528,6 +529,7 @@ class openOrder extends webServiceServer {
                     $bibliographic_record_agency_id,
                     $param->pid,
                     $pickup_agency,
+                    $responder_id,
                     $param->serviceRequester->_value);
       }
       verbose::log(DEBUG, 'openorder:: policy: ' . str_replace("\n", ' ', print_r($policy, TRUE)));
@@ -1135,10 +1137,11 @@ class openOrder extends webServiceServer {
    * @param string $requester
    * @retval mixed - array or FALSE
    */
-  private function check_order_policy($record_id, $record_agency, $pids, $pickup_agency, $requester) {
+  private function check_order_policy($record_id, $record_agency, $pids, $pickup_agency, $responder_id, $requester) {
     $os_obj->serviceRequester = $requester;
     $os_obj->bibliographicRecordId = $record_id;
     $os_obj->pickUpAgencyId = $pickup_agency;
+    $os_obj->responderId = $responder_id;
     $os_obj->bibliographicRecordAgencyId = $record_agency;
     foreach ($pids as $pid) {
       if ($pid->_value) {
@@ -1146,7 +1149,7 @@ class openOrder extends webServiceServer {
         $pid_str .= $pid->_value;
       }
     }
-    $fname = TMP_PATH .  md5($record_id .  $record_agency . $pid_str . $pickup_agency .  $requester . microtime(TRUE));
+    $fname = TMP_PATH .  md5($record_id .  $record_agency . $pid_str . $pickup_agency . $responder . $requester . microtime(TRUE));
     return self::exec_order_policy($os_obj, $fname);
   }
 
