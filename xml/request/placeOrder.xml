@@ -52,13 +52,15 @@
          <!--Optional:-->
          <open:pagination>?</open:pagination>
          <!--Optional:-->
-         <open:pid>?</open:pid>
-         <!--Optional:-->
          <open:pickUpAgencyId>?</open:pickUpAgencyId>
          <!--Optional:-->
          <open:pickUpAgencySubdivision>?</open:pickUpAgencySubdivision>
+         <!--Zero or more repetitions:-->
+         <open:pid>?</open:pid>
          <!--Optional:-->
          <open:placeOfPublication>?</open:placeOfPublication>
+         <!--Optional:-->
+         <open:placeOnHold>?</open:placeOnHold>
          <!--Optional:-->
          <open:publicationDate>?</open:publicationDate>
          <!--Optional:-->

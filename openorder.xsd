@@ -158,6 +158,7 @@
 				<xs:element ref="oo:pickUpAgencySubdivision" minOccurs="0"/>
  				<xs:element ref="oo:pid" minOccurs="0" maxOccurs="unbounded"/>
 				<xs:element ref="oo:placeOfPublication" minOccurs="0"/>
+				<xs:element ref="oo:placeOnHold" minOccurs="0"/>
 				<xs:element ref="oo:publicationDate" minOccurs="0"/>
 				<xs:element ref="oo:publicationDateOfComponent" minOccurs="0"/>
 				<xs:element ref="oo:publisher" minOccurs="0"/>
@@ -637,6 +638,7 @@
 			<xs:documentation xml:lang="en">The place of publication of the requested material.</xs:documentation>
 		</xs:annotation>
 	</xs:element>
+	<xs:element name="placeOnHold" type="oo:placeOnHoldType"/>
 	<xs:element name="placeOrderError" type="oo:placeOrderErrorType">
 		<xs:annotation>
 			<xs:documentation xml:lang="en">Message returned by the service, if an error occurs.</xs:documentation>
@@ -933,6 +935,13 @@
 			<xs:enumeration value="not_owned_accepted_by_consortia"/>
 		</xs:restriction>
 	</xs:simpleType>
+  <xs:simpleType name="placeOnHoldType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="yes"/>
+      <xs:enumeration value="no"/>
+      <xs:enumeration value="responder_depending"/>
+    </xs:restriction>
+  </xs:simpleType>
 	<xs:simpleType name="placeOrderErrorType">
 		<xs:restriction base="xs:string">
 			<xs:enumeration value="owned_wrong_mediumType"/>

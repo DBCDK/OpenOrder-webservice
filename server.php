@@ -520,6 +520,7 @@ class openOrder extends webServiceServer {
           $policy = self::check_ill_order_policy(
                       $param->bibliographicRecordId->_value,
                       $bibliographic_record_agency_id,
+                      $param->pid,
                       $responder_id);
         }
       }
@@ -579,6 +580,7 @@ class openOrder extends webServiceServer {
           self::add_ubf_node($ubf, $order, 'pid', $p->_value);
         self::add_ubf_node($ubf, $order, 'pickUpAgencyId', $pickup_agency);
         self::add_ubf_node($ubf, $order, 'pickUpAgencySubdivision', $param->pickUpAgencySubdivision->_value);
+        self::add_ubf_node($ubf, $order, 'placeOnHold', $param->placeOnHold->_value);
         self::add_ubf_node($ubf, $order, 'placeOfPublication', $param->placeOfPublication->_value);		// ??
         self::add_ubf_node($ubf, $order, 'publicationDate', $param->publicationDate->_value);
         self::add_ubf_node($ubf, $order, 'publicationDateOfComponent', $param->publicationDateOfComponent->_value);
@@ -1120,11 +1122,17 @@ class openOrder extends webServiceServer {
    * @param string $responder_id
    * @retval mixed - array or FALSE
    */
-  private function check_ill_order_policy($record_id, $record_agency, $responder_id) {
+  private function check_ill_order_policy($record_id, $record_agency, $pids, $responder_id) {
     $fname = TMP_PATH .  md5($record_id .  $record_agency . $responder_id . microtime(TRUE));
     $os_obj->receiverId = $responder_id;
     $os_obj->bibliographicRecordId = $record_id;
     $os_obj->bibliographicRecordAgencyId = $record_agency;
+    foreach ($pids as $pid) {
+      if ($pid->_value) {
+        $os_obj->pids[] = $pid->_value;
+        $pid_str .= $pid->_value;
+      }
+    }
     return self::exec_order_policy($os_obj, $fname, 'ill');
   }
 
