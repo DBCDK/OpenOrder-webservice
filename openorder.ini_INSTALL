@@ -163,6 +163,7 @@ notemap[nourl][false][other agency owns material] = not_owned_wrong_ILL_mediumTy
 notemap[nourl][false][no holdings] = not_owned_no_ILL_loc
 notemap[url][false][agency owns material] = owned_own_catalogue
 notemap[nourl][false][not owned accepted by consortia] = not_owned_accepted_by_consortia
+notemap[nourl][true][no holdings] = not_owned_no_ILL_loc
 
 ; ==============
 
